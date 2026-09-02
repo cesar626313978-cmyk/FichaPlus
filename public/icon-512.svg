@@ -1,0 +1,39 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+  <defs>
+    <linearGradient id="pwaGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#6366f1" />
+      <stop offset="50%" stop-color="#4f46e5" />
+      <stop offset="100%" stop-color="#3730a3" />
+    </linearGradient>
+    <filter id="pwaShadow" x="-20%" y="-20%" width="140%" height="140%">
+      <feDropShadow dx="0" dy="8" stdDeviation="12" flood-color="#312e81" flood-opacity="0.35" />
+    </filter>
+  </defs>
+  <!-- Background Rounded Rect -->
+  <rect width="512" height="512" rx="128" fill="url(#pwaGrad)" />
+  
+  <!-- Outer Clock Ring -->
+  <circle cx="256" cy="256" r="160" fill="none" stroke="#ffffff" stroke-width="24" stroke-linecap="round" opacity="0.9" />
+  
+  <!-- Clock ticks -->
+  <circle cx="256" cy="130" r="8" fill="#a5b4fc" />
+  <circle cx="382" cy="256" r="8" fill="#a5b4fc" />
+  <circle cx="256" cy="382" r="8" fill="#a5b4fc" />
+  <circle cx="130" cy="256" r="8" fill="#a5b4fc" />
+
+  <!-- Hands -->
+  <!-- Hour hand pointing to 9 / 10 -->
+  <line x1="256" y1="256" x2="256" y2="165" stroke="#ffffff" stroke-width="24" stroke-linecap="round" />
+  <!-- Minute hand pointing to 2 -->
+  <line x1="256" y1="256" x2="335" y2="210" stroke="#fcd34d" stroke-width="20" stroke-linecap="round" />
+  
+  <!-- Center Pin -->
+  <circle cx="256" cy="256" r="18" fill="#ffffff" filter="url(#pwaShadow)" />
+  <circle cx="256" cy="256" r="8" fill="#4f46e5" />
+
+  <!-- Checkmark / GPS Badge at Bottom Right -->
+  <g transform="translate(320, 320)">
+    <circle cx="45" cy="45" r="45" fill="#10b981" filter="url(#pwaShadow)" />
+    <path d="M28 45 L39 56 L62 33" fill="none" stroke="#ffffff" stroke-width="8" stroke-linecap="round" stroke-linejoin="round" />
+  </g>
+</svg>
