@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { useApp } from '../context/AppContext';
-import { EmployeeRecord } from '../types';
+import { EmployeeRecord, SaturdayPlanType } from '../types';
 import { EmployeeInviteModal } from '../components/EmployeeInviteModal';
 import { UserAvatar } from '../components/UserAvatar';
 import { ShiftConfigurator } from '../components/ShiftConfigurator';
@@ -8,6 +8,10 @@ import {
   isShiftPartida,
   calculateWeekAorB,
   getEmployeeShiftInfo,
+  getEffectiveSaturdayPlan,
+  getNextSaturday,
+  doesEmployeeWorkSaturday,
+  getSaturdayScheduleBadge,
 } from '../utils/shiftUtils';
 
 export const EmployeesView: React.FC = () => {
@@ -29,6 +33,7 @@ export const EmployeesView: React.FC = () => {
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>('ALL');
   const [departmentFilter, setDepartmentFilter] = useState<string>('ALL');
+  const [saturdayFilter, setSaturdayFilter] = useState<string>('ALL');
   const [successToast, setSuccessToast] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
   const [inviteModalEmployee, setInviteModalEmployee] = useState<EmployeeRecord | null>(null);
@@ -51,6 +56,8 @@ export const EmployeesView: React.FC = () => {
   const [shiftWeekA, setShiftWeekA] = useState<string>('Continua (08:00 - 16:00)');
   const [shiftWeekB, setShiftWeekB] = useState<string>('Partida (09:00 - 14:00 / 16:00 - 19:00)');
   const [worksSaturday, setWorksSaturday] = useState<boolean>(true);
+  const [saturdayPlan, setSaturdayPlan] = useState<SaturdayPlanType>('ALTERNO_A');
+  const [saturdayReferenceDate, setSaturdayReferenceDate] = useState<string>('2026-01-05');
   const [saturdayShift, setSaturdayShift] = useState<string>('Continua (09:00 - 14:00)');
   const [saturdayShiftWeekB, setSaturdayShiftWeekB] = useState<string>('Continua (09:00 - 14:00)');
   const [pinCode, setPinCode] = useState('1234');
@@ -74,6 +81,8 @@ export const EmployeesView: React.FC = () => {
     // Check if company operates on Saturdays
     const companySatEnabled = companySettings.operatingHours?.saturday?.enabled ?? true;
     setWorksSaturday(companySatEnabled);
+    setSaturdayPlan(companySatEnabled ? 'ALTERNO_A' : 'NO');
+    setSaturdayReferenceDate('2026-01-05');
     setSaturdayShift(
       companySettings.operatingHours?.saturday?.type === 'partida'
         ? 'Partida (10:00 - 14:00 / 17:00 - 20:30)'
@@ -100,7 +109,10 @@ export const EmployeesView: React.FC = () => {
     setRotationStartDate(emp.rotationStartDate || new Date().toISOString().slice(0, 10));
     setShiftWeekA(emp.shiftWeekA || 'Continua (08:00 - 16:00)');
     setShiftWeekB(emp.shiftWeekB || 'Partida (09:00 - 14:00 / 16:00 - 19:00)');
-    setWorksSaturday(emp.worksSaturday ?? (companySettings.operatingHours?.saturday?.enabled ?? true));
+    const effectiveSat = getEffectiveSaturdayPlan(emp);
+    setSaturdayPlan(effectiveSat);
+    setWorksSaturday(effectiveSat !== 'NO');
+    setSaturdayReferenceDate(emp.saturdayReferenceDate || emp.rotationStartDate || '2026-01-05');
     setSaturdayShift(emp.saturdayShift || 'Continua (09:00 - 14:00)');
     setSaturdayShiftWeekB(emp.saturdayShiftWeekB || emp.saturdayShift || 'Continua (09:00 - 14:00)');
     setPinCode(emp.pinCode || '1234');
@@ -115,6 +127,7 @@ export const EmployeesView: React.FC = () => {
     try {
       const finalDni = dni.trim() || `${Math.floor(10000000 + Math.random() * 90000000)}X`;
       const finalNumber = employeeNumber.trim() || `EMP-00${employees.length + 1}`;
+      const doesWorkSat = saturdayPlan !== 'NO';
 
       if (editingEmployeeId) {
         await updateEmployee(editingEmployeeId, {
@@ -132,7 +145,9 @@ export const EmployeesView: React.FC = () => {
           rotationStartDate,
           shiftWeekA,
           shiftWeekB,
-          worksSaturday,
+          worksSaturday: doesWorkSat,
+          saturdayPlan,
+          saturdayReferenceDate,
           saturdayShift,
           saturdayShiftWeekB,
           pinCode,
@@ -156,7 +171,9 @@ export const EmployeesView: React.FC = () => {
           rotationStartDate,
           shiftWeekA,
           shiftWeekB,
-          worksSaturday,
+          worksSaturday: doesWorkSat,
+          saturdayPlan,
+          saturdayReferenceDate,
           saturdayShift,
           saturdayShiftWeekB,
           joinedDate: new Date().toISOString().slice(0, 10),
@@ -188,10 +205,34 @@ export const EmployeesView: React.FC = () => {
       emp.email.toLowerCase().includes(searchTerm.toLowerCase());
     const matchesStatus = statusFilter === 'ALL' || emp.status === statusFilter;
     const matchesDept = departmentFilter === 'ALL' || emp.department === departmentFilter;
-    return matchesSearch && matchesStatus && matchesDept;
+    const satPlan = getEffectiveSaturdayPlan(emp);
+    const doesWorkThisSat = doesEmployeeWorkSaturday(emp);
+    const matchesSat =
+      saturdayFilter === 'ALL'
+        ? true
+        : saturdayFilter === 'WORKS_THIS_SAT'
+        ? doesWorkThisSat
+        : saturdayFilter === 'RESTS_THIS_SAT'
+        ? !doesWorkThisSat
+        : saturdayFilter === 'ALTERNO'
+        ? satPlan === 'ALTERNO_A' || satPlan === 'ALTERNO_B'
+        : saturdayFilter === 'NO'
+        ? satPlan === 'NO'
+        : saturdayFilter === 'TODOS'
+        ? satPlan === 'TODOS'
+        : true;
+    return matchesSearch && matchesStatus && matchesDept && matchesSat;
   });
 
   const departments = Array.from(new Set(employees.map((e) => e.department).filter(Boolean)));
+  const nextSat = getNextSaturday();
+  const nextSatFormatted = nextSat.toLocaleDateString('es-ES', {
+    weekday: 'short',
+    day: 'numeric',
+    month: 'short',
+  });
+  const workingThisSatCount = employees.filter((e) => doesEmployeeWorkSaturday(e, nextSat)).length;
+  const restingThisSatCount = employees.length - workingThisSatCount;
 
   return (
     <div className="max-w-6xl mx-auto flex flex-col gap-6">
@@ -384,6 +425,21 @@ export const EmployeesView: React.FC = () => {
             <option value="INACTIVO">● Inactivos</option>
           </select>
 
+          {/* Saturday Plan Filter */}
+          <select
+            value={saturdayFilter}
+            onChange={(e) => setSaturdayFilter(e.target.value)}
+            className="bg-indigo-50/80 border border-indigo-200 px-3 py-2 rounded-xl text-xs font-bold text-indigo-950 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+            title="Filtrar por turno y planificación de sábados"
+          >
+            <option value="ALL">📅 Todos los Sábados</option>
+            <option value="WORKS_THIS_SAT">✓ Trabajan este sábado ({nextSatFormatted})</option>
+            <option value="RESTS_THIS_SAT">✕ Descansan este sábado ({nextSatFormatted})</option>
+            <option value="ALTERNO">🔄 Turnos Alternos (1 Sí / 1 No)</option>
+            <option value="TODOS">🏢 Todos los Sábados (Fijo)</option>
+            <option value="NO">🚫 Sábados Libres (L-V)</option>
+          </select>
+
           {departments.length > 0 && (
             <select
               value={departmentFilter}
@@ -405,6 +461,54 @@ export const EmployeesView: React.FC = () => {
           >
             <span className="material-symbols-outlined text-base">add</span>
             Añadir
+          </button>
+        </div>
+      </div>
+
+      {/* Saturday Coverage Planning Bar */}
+      <div className="bg-gradient-to-r from-indigo-50 via-purple-50 to-blue-50 border border-indigo-100 rounded-3xl p-4 sm:p-5 flex flex-col md:flex-row justify-between items-start md:items-center gap-3.5 shadow-2xs">
+        <div className="flex items-start sm:items-center gap-3">
+          <div className="w-10 h-10 rounded-2xl bg-indigo-600 text-white flex items-center justify-center shrink-0 shadow-xs">
+            <span className="material-symbols-outlined text-xl">event_upcoming</span>
+          </div>
+          <div>
+            <div className="flex items-center gap-2 flex-wrap">
+              <h3 className="text-xs sm:text-sm font-black text-slate-900 uppercase tracking-wider">
+                Planificación de Sábados • Próximo Sábado ({nextSatFormatted})
+              </h3>
+              <span className="text-[10px] font-black uppercase bg-indigo-100 text-indigo-800 px-2 py-0.5 rounded-full border border-indigo-200">
+                Rotación 1 Sí / 1 No
+              </span>
+            </div>
+            <p className="text-[11px] sm:text-xs text-slate-600 mt-0.5">
+              <strong className="text-indigo-700">{workingThisSatCount} empleados asignados</strong> a trabajar el sábado •{' '}
+              <strong className="text-slate-700">{restingThisSatCount} empleados en descanso</strong> (incluye turnos alternos y descanso semanal).
+            </p>
+          </div>
+        </div>
+
+        <div className="flex items-center gap-2 flex-wrap text-xs shrink-0">
+          <button
+            type="button"
+            onClick={() => setSaturdayFilter(saturdayFilter === 'WORKS_THIS_SAT' ? 'ALL' : 'WORKS_THIS_SAT')}
+            className={`px-3 py-1.5 rounded-xl font-bold transition-all cursor-pointer flex items-center gap-1 text-xs ${
+              saturdayFilter === 'WORKS_THIS_SAT'
+                ? 'bg-indigo-600 text-white shadow-xs'
+                : 'bg-white border border-indigo-200 text-indigo-700 hover:bg-indigo-50'
+            }`}
+          >
+            <span>Ver quién trabaja ({workingThisSatCount})</span>
+          </button>
+          <button
+            type="button"
+            onClick={() => setSaturdayFilter(saturdayFilter === 'RESTS_THIS_SAT' ? 'ALL' : 'RESTS_THIS_SAT')}
+            className={`px-3 py-1.5 rounded-xl font-bold transition-all cursor-pointer flex items-center gap-1 text-xs ${
+              saturdayFilter === 'RESTS_THIS_SAT'
+                ? 'bg-indigo-600 text-white shadow-xs'
+                : 'bg-white border border-slate-200 text-slate-700 hover:bg-slate-50'
+            }`}
+          >
+            <span>Ver quién descansa ({restingThisSatCount})</span>
           </button>
         </div>
       </div>
@@ -486,9 +590,6 @@ export const EmployeesView: React.FC = () => {
                     <span className="text-[10px] text-slate-500 line-clamp-1" title={`Semana A: ${emp.shiftWeekA} | Semana B: ${emp.shiftWeekB}`}>
                       L-V: {calculateWeekAorB(emp.rotationStartDate) === 'A' ? emp.shiftWeekA : emp.shiftWeekB}
                     </span>
-                    <span className="text-[10px] font-semibold text-blue-600">
-                      {emp.worksSaturday ? `+ Sáb: ${emp.saturdayShift || '09:00 - 14:00'}` : 'Sábados Libres'}
-                    </span>
                   </div>
                 ) : (
                   <div className="flex flex-col gap-0.5">
@@ -498,11 +599,32 @@ export const EmployeesView: React.FC = () => {
                     <span className="text-[10px] text-slate-500 line-clamp-1" title={emp.shiftWeekA}>
                       L-V: {emp.shiftWeekA}
                     </span>
-                    <span className="text-[10px] font-semibold text-blue-600">
-                      {emp.worksSaturday ? `+ Sáb: ${emp.saturdayShift || '09:00 - 14:00'}` : 'Sábados Libres'}
-                    </span>
                   </div>
                 )}
+
+                {/* Sábados Badge & Status */}
+                {(() => {
+                  const satBadge = getSaturdayScheduleBadge(emp);
+                  return (
+                    <div className="mt-1 pt-1 border-t border-slate-200/50 flex flex-col gap-0.5">
+                      <div className="flex items-center justify-between gap-1">
+                        <span className="text-[9px] font-bold text-slate-400 uppercase">Sábado:</span>
+                        <span className={`text-[9px] font-black px-1.5 py-0.5 rounded border ${satBadge.badgeClass}`}>
+                          {satBadge.shortLabel}
+                        </span>
+                      </div>
+                      <span
+                        className={`text-[9px] font-bold leading-tight ${
+                          satBadge.worksUpcomingSaturday ? 'text-indigo-700' : 'text-slate-400'
+                        }`}
+                      >
+                        {satBadge.worksUpcomingSaturday
+                          ? `✓ Trabaja sáb. ${satBadge.upcomingDateFormatted}`
+                          : `✕ Libre sáb. ${satBadge.upcomingDateFormatted}`}
+                      </span>
+                    </div>
+                  );
+                })()}
               </div>
               <div className="col-span-2 sm:col-span-3 border-t border-slate-200/60 pt-2 flex flex-wrap justify-between items-center gap-2 text-[11px] text-slate-500">
                 <span className="flex items-center gap-1">
@@ -884,6 +1006,10 @@ export const EmployeesView: React.FC = () => {
                     accentColor="indigo"
                     worksSaturday={worksSaturday}
                     onWorksSaturdayChange={setWorksSaturday}
+                    saturdayPlan={saturdayPlan}
+                    onSaturdayPlanChange={setSaturdayPlan}
+                    saturdayReferenceDate={saturdayReferenceDate}
+                    onSaturdayReferenceDateChange={setSaturdayReferenceDate}
                     saturdayShift={saturdayShift}
                     onSaturdayShiftChange={setSaturdayShift}
                     companyOperatingHours={companySettings.operatingHours}
@@ -904,7 +1030,10 @@ export const EmployeesView: React.FC = () => {
                         type="date"
                         required
                         value={rotationStartDate}
-                        onChange={(e) => setRotationStartDate(e.target.value)}
+                        onChange={(e) => {
+                          setRotationStartDate(e.target.value);
+                          setSaturdayReferenceDate(e.target.value);
+                        }}
                         className="w-full bg-white border-2 border-purple-200 p-3 rounded-2xl font-semibold text-slate-800 text-sm focus:border-purple-600 focus:outline-none"
                       />
                     </div>
@@ -919,6 +1048,10 @@ export const EmployeesView: React.FC = () => {
                         accentColor="indigo"
                         worksSaturday={worksSaturday}
                         onWorksSaturdayChange={setWorksSaturday}
+                        saturdayPlan={saturdayPlan}
+                        onSaturdayPlanChange={setSaturdayPlan}
+                        saturdayReferenceDate={saturdayReferenceDate}
+                        onSaturdayReferenceDateChange={setSaturdayReferenceDate}
                         saturdayShift={saturdayShift}
                         onSaturdayShiftChange={setSaturdayShift}
                         companyOperatingHours={companySettings.operatingHours}
@@ -932,6 +1065,10 @@ export const EmployeesView: React.FC = () => {
                         accentColor="purple"
                         worksSaturday={worksSaturday}
                         onWorksSaturdayChange={setWorksSaturday}
+                        saturdayPlan={saturdayPlan}
+                        onSaturdayPlanChange={setSaturdayPlan}
+                        saturdayReferenceDate={saturdayReferenceDate}
+                        onSaturdayReferenceDateChange={setSaturdayReferenceDate}
                         saturdayShift={saturdayShiftWeekB}
                         onSaturdayShiftChange={setSaturdayShiftWeekB}
                         companyOperatingHours={companySettings.operatingHours}

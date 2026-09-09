@@ -104,26 +104,29 @@ export const DashboardView: React.FC = () => {
 
   // Render the Clean, Mobile-First Terminal Clock component
   const renderTerminalClock = () => {
+    const employeeFirstName = currentEmployee?.name.split(' ')[0] || profile.name.split(' ')[0] || 'Usuario';
+    const weeklyTarget = currentEmployee?.weeklyHours || 40;
+
     return (
-      <div className="flex flex-col gap-6">
+      <div className="flex flex-col gap-4 max-w-xl mx-auto w-full">
         {/* Main Punch Clock Terminal Surface */}
-        <section className="bg-white rounded-3xl p-6 sm:p-8 md:p-10 shadow-sm border border-slate-100 flex flex-col items-center text-center relative overflow-hidden">
-          {/* Header with Date and Live Official Time */}
-          <div className="flex flex-col sm:flex-row items-center justify-between w-full pb-4 mb-5 border-b border-slate-100/80 gap-2">
+        <section className="bg-white rounded-3xl p-5 sm:p-7 md:p-8 shadow-sm border border-slate-100 flex flex-col items-center text-center relative overflow-hidden">
+          {/* Greeting & Date Header */}
+          <div className="flex flex-col sm:flex-row items-center justify-between w-full pb-3.5 mb-4 border-b border-slate-100 gap-2">
             <div className="text-center sm:text-left">
-              <span className="text-xs font-bold text-slate-400 uppercase tracking-wider block">
+              <h2 className="text-base sm:text-lg font-black text-slate-900 tracking-tight">
+                ¡Hola, {employeeFirstName}! 👋
+              </h2>
+              <span className="text-xs font-semibold text-slate-400 capitalize block">
                 {nowTime.toLocaleDateString('es-ES', {
                   weekday: 'long',
                   day: 'numeric',
                   month: 'long',
-                  year: 'numeric',
                 })}
               </span>
-              <span className="text-xs font-semibold text-slate-600">
-                Registro de Jornada • Art. 34.9 ET
-              </span>
             </div>
-            <div className="flex items-center gap-2 bg-slate-50 border border-slate-200/70 px-3.5 py-1.5 rounded-full text-xs font-mono font-bold text-slate-700">
+            {/* Live Official Clock Pill */}
+            <div className="flex items-center gap-1.5 bg-slate-50 border border-slate-200/80 px-3 py-1.5 rounded-full text-xs font-mono font-bold text-slate-700 shrink-0">
               <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
               <span>
                 {nowTime.toLocaleTimeString('es-ES', {
@@ -135,199 +138,158 @@ export const DashboardView: React.FC = () => {
             </div>
           </div>
 
-          {/* Work Location Mode Selector */}
-          <div className="mb-5 flex flex-wrap justify-center gap-2 bg-slate-100/90 p-1.5 rounded-2xl border border-slate-200/60 max-w-sm w-full">
+          {/* Quick Work Location Mode Selector */}
+          <div className="mb-3 flex justify-center gap-1.5 bg-slate-100/80 p-1 rounded-2xl border border-slate-200/60 w-full max-w-xs">
             {(['presencial', 'teletrabajo', 'cliente'] as const).map((type) => (
               <button
                 key={type}
                 onClick={() => setWorkType(type)}
-                className={`flex-1 py-2 px-3 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center justify-center gap-1.5 ${
+                className={`flex-1 py-1.5 px-2 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center justify-center gap-1 ${
                   workType === type
-                    ? 'bg-indigo-600 text-white shadow-md shadow-indigo-100'
-                    : 'text-slate-600 hover:text-slate-900 hover:bg-slate-200/50'
+                    ? 'bg-indigo-600 text-white shadow-xs'
+                    : 'text-slate-600 hover:text-slate-900'
                 }`}
               >
                 <span>{type === 'presencial' ? '🏢' : type === 'teletrabajo' ? '🏠' : '🚗'}</span>
-                <span className="capitalize">
-                  {type === 'presencial'
-                    ? 'Oficina'
-                    : type === 'teletrabajo'
-                    ? 'Teletrabajo'
-                    : 'En Ruta'}
+                <span className="capitalize text-[11px]">
+                  {type === 'presencial' ? 'Oficina' : type === 'teletrabajo' ? 'Casa' : 'Ruta'}
                 </span>
               </button>
             ))}
           </div>
 
-          {/* Current Status Badge */}
+          {/* Current Status Pill */}
           <div className="mb-2">
             {isClockedIn ? (
               isPaused ? (
-                <span className="inline-flex items-center gap-2 bg-amber-50 text-amber-700 border border-amber-200 px-4 py-1.5 rounded-full text-xs font-black uppercase tracking-wider">
-                  <span className="w-2.5 h-2.5 rounded-full bg-amber-500 animate-ping"></span>
-                  <span>☕ En Pausa ({pauseReason || 'Descanso'})</span>
+                <span className="inline-flex items-center gap-1.5 bg-amber-50 text-amber-800 border border-amber-200 px-3.5 py-1 rounded-full text-xs font-bold">
+                  <span className="w-2 h-2 rounded-full bg-amber-500 animate-ping"></span>
+                  <span>En Pausa ({pauseReason || 'Descanso'})</span>
                 </span>
               ) : (
-                <span className="inline-flex items-center gap-2 bg-emerald-50 text-emerald-700 border border-emerald-200 px-4 py-1.5 rounded-full text-xs font-black uppercase tracking-wider">
-                  <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-ping"></span>
-                  <span>🟢 En Jornada Activa</span>
+                <span className="inline-flex items-center gap-1.5 bg-emerald-50 text-emerald-800 border border-emerald-200 px-3.5 py-1 rounded-full text-xs font-bold">
+                  <span className="w-2 h-2 rounded-full bg-emerald-500 animate-ping"></span>
+                  <span>En Jornada Activa</span>
                 </span>
               )
             ) : (
-              <span className="inline-flex items-center gap-2 bg-slate-100 text-slate-600 border border-slate-200 px-4 py-1.5 rounded-full text-xs font-bold uppercase tracking-wider">
-                <span className="w-2.5 h-2.5 rounded-full bg-slate-400"></span>
-                <span>⚪ Fuera de Jornada • Listo para Fichar</span>
+              <span className="inline-flex items-center gap-1.5 bg-slate-100 text-slate-600 border border-slate-200 px-3.5 py-1 rounded-full text-xs font-bold">
+                <span className="w-2 h-2 rounded-full bg-slate-400"></span>
+                <span>Fuera de Jornada</span>
               </span>
             )}
           </div>
 
-          {/* Big Timer Display */}
-          <div className="bg-slate-50/80 border border-slate-200/80 rounded-3xl px-8 py-6 my-4 w-full max-w-sm shadow-inner flex flex-col items-center">
-            <span className="font-mono text-5xl sm:text-6xl font-black tracking-tight text-slate-900">
+          {/* Big Clean Timer / Clock Display */}
+          <div className="bg-slate-50/90 border border-slate-200/80 rounded-3xl px-6 py-5 my-3 w-full max-w-sm shadow-inner flex flex-col items-center">
+            <span className="font-mono text-5xl sm:text-6xl font-black tracking-tight text-slate-900 leading-none">
               {isClockedIn
                 ? formatTimer(elapsedSeconds)
                 : nowTime.toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' })}
             </span>
             <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider mt-2">
               {isClockedIn
-                ? `Tiempo trabajado hoy (${workType === 'presencial' ? 'oficina' : workType})`
-                : 'Hora oficial'}
+                ? `Horas trabajadas hoy (${workType === 'presencial' ? 'oficina' : workType})`
+                : 'Hora local oficial'}
             </span>
           </div>
 
-          {/* Live GPS location indicator */}
-          <div className="mb-6 inline-flex items-center gap-2 bg-slate-50 border border-slate-200 px-3.5 py-1.5 rounded-full text-xs text-slate-600">
-            <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
-            <span className="font-semibold text-slate-700">
+          {/* Discreet GPS status chip */}
+          <div className="mb-4 inline-flex items-center gap-1.5 bg-slate-50 border border-slate-200 px-3 py-1 rounded-full text-[11px] text-slate-600">
+            <span className="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
+            <span>
               {locationStamp ? (
                 <>
-                  📍 GPS:{' '}
-                  <span className="font-mono text-indigo-600">
-                    {locationStamp.address ||
-                      `${locationStamp.latitude.toFixed(4)}°N, ${locationStamp.longitude.toFixed(4)}°W`}
+                  GPS:{' '}
+                  <span className="font-medium text-slate-800">
+                    {locationStamp.address || `${locationStamp.latitude.toFixed(3)}°, ${locationStamp.longitude.toFixed(3)}°`}
                   </span>{' '}
                   (±{locationStamp.accuracy}m)
                 </>
               ) : (
-                '📍 GPS: Localizando satélite...'
+                'GPS Satélite activo'
               )}
             </span>
             <button
               onClick={() => refreshLocation()}
               disabled={isLocatingGps}
-              className="text-indigo-600 font-bold hover:underline ml-1 cursor-pointer"
+              className="text-indigo-600 font-bold hover:underline ml-0.5 cursor-pointer"
             >
-              {isLocatingGps ? 'Buscando...' : 'Calibrar'}
+              {isLocatingGps ? '...' : 'Calibrar'}
             </button>
           </div>
 
-          {/* Action Buttons with Clear Touch Targets for Mobile */}
-          <div className="flex flex-col sm:flex-row gap-3 w-full justify-center max-w-md">
+          {/* High-Contrast Large Touch Action Buttons */}
+          <div className="flex flex-col sm:flex-row gap-3 w-full justify-center max-w-sm">
             {!isClockedIn ? (
-              // When Not Clocked In: Simple Fichar Entrada
+              // When Not Clocked In: Big Emerald Entry Punch Button
               <button
                 onClick={() => requestClockAction('start_single')}
-                className="w-full bg-emerald-600 hover:bg-emerald-700 active:scale-[0.98] text-white py-4 px-8 rounded-2xl font-black text-base sm:text-lg shadow-lg shadow-emerald-200 hover:shadow-xl transition-all flex items-center justify-center gap-3 cursor-pointer"
+                className="w-full bg-emerald-600 hover:bg-emerald-700 active:scale-[0.98] text-white py-4 px-6 rounded-2xl font-black text-base sm:text-lg shadow-lg shadow-emerald-200/70 hover:shadow-xl transition-all flex items-center justify-center gap-2.5 cursor-pointer"
               >
-                <span className="material-symbols-outlined text-2xl">login</span>
+                <span className="material-symbols-outlined text-2xl font-bold">login</span>
                 <span>FICHAR ENTRADA</span>
               </button>
             ) : isPaused ? (
               // When Paused: Reanudar or Salida
-              <>
+              <div className="grid grid-cols-2 gap-2.5 w-full">
                 <button
                   onClick={() => requestClockAction('resume')}
-                  className="flex-1 bg-emerald-600 hover:bg-emerald-700 active:scale-[0.98] text-white py-4 px-6 rounded-2xl font-black text-sm sm:text-base shadow-md shadow-emerald-100 transition-all flex items-center justify-center gap-2 cursor-pointer"
+                  className="bg-emerald-600 hover:bg-emerald-700 active:scale-[0.98] text-white py-3.5 px-4 rounded-2xl font-black text-sm shadow-md shadow-emerald-100 transition-all flex items-center justify-center gap-1.5 cursor-pointer"
                 >
-                  <span className="material-symbols-outlined text-2xl">play_arrow</span>
+                  <span className="material-symbols-outlined text-xl">play_arrow</span>
                   <span>REANUDAR</span>
                 </button>
                 <button
                   onClick={() => requestClockAction('stop_single')}
-                  className="flex-1 bg-rose-600 hover:bg-rose-700 active:scale-[0.98] text-white py-4 px-6 rounded-2xl font-black text-sm sm:text-base shadow-md shadow-rose-100 transition-all flex items-center justify-center gap-2 cursor-pointer"
+                  className="bg-rose-600 hover:bg-rose-700 active:scale-[0.98] text-white py-3.5 px-4 rounded-2xl font-black text-sm shadow-md shadow-rose-100 transition-all flex items-center justify-center gap-1.5 cursor-pointer"
                 >
-                  <span className="material-symbols-outlined text-2xl">logout</span>
-                  <span>FICHAR SALIDA</span>
+                  <span className="material-symbols-outlined text-xl">logout</span>
+                  <span>SALIDA</span>
                 </button>
-              </>
+              </div>
             ) : (
-              // When Clocked In: Pause and Salida buttons
-              <>
+              // When Clocked In: Pause and Salida
+              <div className="grid grid-cols-2 gap-2.5 w-full">
                 <button
                   onClick={() => requestClockAction('pause')}
-                  className="flex-1 bg-amber-500 hover:bg-amber-600 active:scale-[0.98] text-white py-4 px-6 rounded-2xl font-black text-sm sm:text-base shadow-md shadow-amber-100 transition-all flex items-center justify-center gap-2 cursor-pointer"
+                  className="bg-amber-500 hover:bg-amber-600 active:scale-[0.98] text-white py-3.5 px-4 rounded-2xl font-black text-sm shadow-md shadow-amber-100 transition-all flex items-center justify-center gap-1.5 cursor-pointer"
                 >
-                  <span className="material-symbols-outlined text-2xl">pause</span>
+                  <span className="material-symbols-outlined text-xl">pause</span>
                   <span>PAUSA</span>
                 </button>
                 <button
                   onClick={() => requestClockAction('stop_single')}
-                  className="flex-1 bg-rose-600 hover:bg-rose-700 active:scale-[0.98] text-white py-4 px-6 rounded-2xl font-black text-sm sm:text-base shadow-md shadow-rose-100 transition-all flex items-center justify-center gap-2 cursor-pointer"
+                  className="bg-rose-600 hover:bg-rose-700 active:scale-[0.98] text-white py-3.5 px-4 rounded-2xl font-black text-sm shadow-md shadow-rose-100 transition-all flex items-center justify-center gap-1.5 cursor-pointer"
                 >
-                  <span className="material-symbols-outlined text-2xl">logout</span>
-                  <span>FICHAR SALIDA</span>
+                  <span className="material-symbols-outlined text-xl">logout</span>
+                  <span>SALIDA</span>
                 </button>
-              </>
+              </div>
             )}
           </div>
 
-          {/* Clean Today's Summary Strip */}
-          <div className="grid grid-cols-3 gap-3 w-full max-w-md mt-6 pt-5 border-t border-slate-100 text-center">
-            <div className="bg-slate-50/80 p-3 rounded-2xl border border-slate-100">
-              <span className="text-[10px] uppercase font-bold text-slate-400 block">Entrada Hoy</span>
+          {/* Clean Today's Summary Strip: Entrada, Horas Hoy, Cómputo Semanal */}
+          <div className="grid grid-cols-3 gap-2.5 w-full max-w-sm mt-5 pt-4 border-t border-slate-100 text-center">
+            <div className="bg-slate-50/80 p-2.5 rounded-2xl border border-slate-100">
+              <span className="text-[10px] uppercase font-bold text-slate-400 block">Entrada</span>
               <span className="font-mono font-bold text-sm text-slate-800">
                 {clockInTime || '--:--'}
               </span>
             </div>
-            <div className="bg-slate-50/80 p-3 rounded-2xl border border-slate-100">
-              <span className="text-[10px] uppercase font-bold text-slate-400 block">Estado</span>
-              <span className="font-bold text-xs text-slate-700">
-                {isClockedIn ? (isPaused ? 'Pausa' : 'En Curso') : 'Inactivo'}
-              </span>
-            </div>
-            <div className="bg-slate-50/80 p-3 rounded-2xl border border-slate-100">
+            <div className="bg-slate-50/80 p-2.5 rounded-2xl border border-slate-100">
               <span className="text-[10px] uppercase font-bold text-slate-400 block">Horas Hoy</span>
               <span className="font-mono font-bold text-sm text-indigo-700">
                 {elapsedSeconds > 0 ? `${(elapsedSeconds / 3600).toFixed(1)}h` : '0.0h'}
               </span>
             </div>
-          </div>
-
-          {/* Optional Reference Schedule Disclosure (Hidden by default for a clean mobile screen) */}
-          <div className="w-full max-w-md mt-4">
-            <button
-              type="button"
-              onClick={() => setShowOptionalSchedule(!showOptionalSchedule)}
-              className="text-xs text-slate-400 hover:text-slate-600 font-semibold inline-flex items-center gap-1.5 transition-colors cursor-pointer py-1"
-            >
-              <span className="material-symbols-outlined text-sm">
-                {showOptionalSchedule ? 'expand_less' : 'info'}
+            <div className="bg-slate-50/80 p-2.5 rounded-2xl border border-slate-100">
+              <span className="text-[10px] uppercase font-bold text-slate-400 block">Semana</span>
+              <span className="font-mono font-bold text-xs text-slate-700">
+                {elapsedSeconds > 0 ? `${(32.5 + elapsedSeconds / 3600).toFixed(1)}h` : '32.5h'}
+                <span className="text-[10px] text-slate-400 font-normal"> / {weeklyTarget}h</span>
               </span>
-              <span>
-                {showOptionalSchedule
-                  ? 'Ocultar información de convenio'
-                  : 'Ver horario de referencia y convenio (Opcional)'}
-              </span>
-            </button>
-
-            {showOptionalSchedule && (
-              <div className="bg-slate-50 border border-slate-200/80 rounded-2xl p-4 mt-2 text-left text-xs animate-in fade-in duration-200">
-                <div className="flex items-center justify-between mb-1.5">
-                  <span className="font-bold text-slate-800">
-                    {currentShiftInfo?.scheduleSummary || 'Jornada Ordinaria (40h/semana)'}
-                  </span>
-                  {currentShiftInfo?.hasRotatingShifts && (
-                    <span className="bg-purple-100 text-purple-700 text-[10px] font-bold px-2 py-0.5 rounded-md">
-                      Semana {currentShiftInfo.currentWeekLetter}
-                    </span>
-                  )}
-                </div>
-                <p className="text-slate-500 text-[11px] leading-relaxed">
-                  Cómputo legal anual flexible de jornada según convenio. Los horarios y descansos
-                  se adaptan a la actividad diaria registrando siempre las horas totales efectivas.
-                </p>
-              </div>
-            )}
+            </div>
           </div>
         </section>
       </div>
@@ -336,48 +298,50 @@ export const DashboardView: React.FC = () => {
 
   return (
     <div className="flex flex-col gap-6 max-w-5xl mx-auto">
-      {/* Mobile Terminal Hardware & Permission Status Bar */}
-      <section className="bg-slate-900 text-white rounded-3xl p-4 sm:p-5 shadow-lg border border-slate-800 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
-        <div className="flex items-center gap-3">
-          <div className="w-10 h-10 rounded-2xl bg-indigo-500/20 text-indigo-400 border border-indigo-500/30 flex items-center justify-center font-bold">
-            <span className="material-symbols-outlined text-xl">satellite_alt</span>
-          </div>
-          <div>
-            <div className="flex items-center gap-2">
-              <h3 className="font-bold text-sm text-white">Terminal PWA & Sensores Móviles</h3>
-              <span className="text-[10px] font-black uppercase tracking-wider bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 px-2 py-0.5 rounded-full">
-                Art. 34.9 ET
-              </span>
+      {/* Mobile Terminal Hardware & Permission Status Bar - Only in Admin Overview */}
+      {isAdmin && adminSubTab === 'overview' && (
+        <section className="bg-slate-900 text-white rounded-3xl p-4 sm:p-5 shadow-lg border border-slate-800 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-2xl bg-indigo-500/20 text-indigo-400 border border-indigo-500/30 flex items-center justify-center font-bold">
+              <span className="material-symbols-outlined text-xl">satellite_alt</span>
             </div>
-            <p className="text-xs text-slate-400">
-              {locationStamp?.verifiedGps
-                ? `GPS Satélite activo (±${locationStamp.accuracy}m) • ${locationStamp.address || 'Ubicación verificada'}`
-                : 'Sensores del teléfono y geolocalización satelital listos'}
-            </p>
+            <div>
+              <div className="flex items-center gap-2">
+                <h3 className="font-bold text-sm text-white">Terminal PWA & Sensores Móviles</h3>
+                <span className="text-[10px] font-black uppercase tracking-wider bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 px-2 py-0.5 rounded-full">
+                  Art. 34.9 ET
+                </span>
+              </div>
+              <p className="text-xs text-slate-400">
+                {locationStamp?.verifiedGps
+                  ? `GPS Satélite activo (±${locationStamp.accuracy}m) • ${locationStamp.address || 'Ubicación verificada'}`
+                  : 'Sensores del teléfono y geolocalización satelital listos'}
+              </p>
+            </div>
           </div>
-        </div>
 
-        <div className="flex items-center gap-2 w-full sm:w-auto justify-end">
-          <button
-            onClick={() => refreshLocation()}
-            disabled={isLocatingGps}
-            title="Recalibrar señal GPS satelital"
-            className="bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-bold py-2 px-3 rounded-xl transition-colors flex items-center gap-1.5 cursor-pointer border border-slate-700"
-          >
-            <span className="material-symbols-outlined text-sm text-indigo-400">
-              {isLocatingGps ? 'sync' : 'my_location'}
-            </span>
-            <span>{isLocatingGps ? 'Buscando...' : 'Calibrar GPS'}</span>
-          </button>
-          <button
-            onClick={() => setShowDeviceModal(true)}
-            className="bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-bold py-2 px-3.5 rounded-xl transition-all flex items-center gap-1.5 cursor-pointer shadow-sm shadow-indigo-900"
-          >
-            <span className="material-symbols-outlined text-sm">settings_suggest</span>
-            <span>Avisos & Sensores</span>
-          </button>
-        </div>
-      </section>
+          <div className="flex items-center gap-2 w-full sm:w-auto justify-end">
+            <button
+              onClick={() => refreshLocation()}
+              disabled={isLocatingGps}
+              title="Recalibrar señal GPS satelital"
+              className="bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-bold py-2 px-3 rounded-xl transition-colors flex items-center gap-1.5 cursor-pointer border border-slate-700"
+            >
+              <span className="material-symbols-outlined text-sm text-indigo-400">
+                {isLocatingGps ? 'sync' : 'my_location'}
+              </span>
+              <span>{isLocatingGps ? 'Buscando...' : 'Calibrar GPS'}</span>
+            </button>
+            <button
+              onClick={() => setShowDeviceModal(true)}
+              className="bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-bold py-2 px-3.5 rounded-xl transition-all flex items-center gap-1.5 cursor-pointer shadow-sm shadow-indigo-900"
+            >
+              <span className="material-symbols-outlined text-sm">settings_suggest</span>
+              <span>Avisos & Sensores</span>
+            </button>
+          </div>
+        </section>
+      )}
 
       {/* ========================================================================= */}
       {/* SUPERUSUARIO / ADMIN VIEW */}
@@ -709,43 +673,34 @@ export const DashboardView: React.FC = () => {
         /* USUARIO / EMPLEADO VIEW */
         /* ========================================================================= */
         <>
-          {/* Pending Legal Tasks Reminder Banner */}
+          {/* Main Clean Terminal Punch Clock - Primary for Mobile */}
+          {renderTerminalClock()}
+
+          {/* Pending Legal Tasks Reminder Banner (Compact below punch clock) */}
           {!monthlyRecord.isSigned && (
-            <section className="bg-gradient-to-r from-amber-500 via-amber-400 to-amber-500 text-slate-900 rounded-3xl p-6 shadow-lg shadow-amber-100 flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
-              <div>
-                <div className="flex items-center gap-2 mb-1">
-                  <span className="material-symbols-outlined text-xl">priority_high</span>
-                  <h2 className="font-bold text-xl md:text-2xl tracking-tight">
-                    Tienes tareas legales pendientes
-                  </h2>
+            <section className="bg-gradient-to-r from-amber-500 via-amber-400 to-amber-500 text-slate-900 rounded-3xl p-5 shadow-sm flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
+              <div className="flex items-center gap-2.5">
+                <span className="material-symbols-outlined text-xl shrink-0">draw</span>
+                <div>
+                  <h3 className="font-bold text-sm tracking-tight">
+                    Firma mensual pendiente
+                  </h3>
+                  <p className="text-xs text-slate-900/80">
+                    Recuerda firmar tu hoja de registro mensual obligatoria de jornada.
+                  </p>
                 </div>
-                <p className="text-sm font-medium text-slate-900/80">
-                  Revisa tu firma mensual obligatoria y peticiones de vacaciones para mantener tu registro al día.
-                </p>
               </div>
-              <div className="flex gap-2 w-full md:w-auto">
+              <div className="flex gap-2 w-full sm:w-auto shrink-0">
                 <button
                   onClick={() => setActiveTab('monthly_sign')}
-                  className="flex-1 md:flex-none bg-white/90 hover:bg-white text-slate-900 px-4 py-2.5 rounded-2xl shadow-sm hover:shadow transition-all flex items-center justify-center gap-2 font-bold text-xs cursor-pointer"
+                  className="flex-1 sm:flex-none bg-white text-slate-900 px-3.5 py-2 rounded-xl shadow-xs hover:shadow transition-all flex items-center justify-center gap-1.5 font-bold text-xs cursor-pointer"
                   title="Firma mensual requerida"
                 >
-                  <span className="material-symbols-outlined text-lg text-indigo-600">draw</span>
-                  <span>Firmar Mes</span>
-                </button>
-                <button
-                  onClick={() => setActiveTab('requests')}
-                  className="flex-1 md:flex-none bg-white/90 hover:bg-white text-slate-900 px-4 py-2.5 rounded-2xl shadow-sm hover:shadow transition-all flex items-center justify-center gap-2 font-bold text-xs cursor-pointer"
-                  title="Solicitar vacaciones"
-                >
-                  <span className="material-symbols-outlined text-lg text-pink-500">flight_takeoff</span>
-                  <span>Vacaciones</span>
+                  <span>Firmar Ahora</span>
                 </button>
               </div>
             </section>
           )}
-
-          {/* Main Terminal Clock with 2-Shift Planner */}
-          {renderTerminalClock()}
 
           {/* Metrics & Highlights Grid (Employee personal data) */}
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6">

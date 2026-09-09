@@ -19,6 +19,8 @@ export interface CompanyOperatingHours {
   sunday: DayScheduleConfig;
 }
 
+export type SaturdayPlanType = 'NO' | 'ALTERNO_A' | 'ALTERNO_B' | 'TODOS';
+
 export interface EmployeeRecord {
   id: string;
   employeeNumber: string; // EMP-001
@@ -42,8 +44,10 @@ export interface EmployeeRecord {
   shiftWeekB?: string;
   // Saturday & Weekend Schedule
   worksSaturday?: boolean;
+  saturdayPlan?: SaturdayPlanType; // 'NO' = No trabaja, 'ALTERNO_A' = Sábado sí/no (Semana A), 'ALTERNO_B' = Sábado sí/no (Semana B), 'TODOS' = Todos los sábados
   saturdayShift?: string; // e.g. "Continua (09:00 - 14:00)"
   saturdayShiftWeekB?: string;
+  saturdayReferenceDate?: string;
   worksSunday?: boolean;
   sundayShift?: string;
   joinedDate: string;

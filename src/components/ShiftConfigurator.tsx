@@ -8,8 +8,10 @@ import {
   computeShiftMinutes,
   computeTotalWeeklyHours,
   configToShiftString,
+  calculateWeekAorB,
+  getNextSaturday,
 } from '../utils/shiftUtils';
-import { CompanyOperatingHours } from '../types';
+import { CompanyOperatingHours, SaturdayPlanType } from '../types';
 
 interface ShiftConfiguratorProps {
   value: string;
@@ -20,8 +22,12 @@ interface ShiftConfiguratorProps {
   // Saturday configuration
   worksSaturday?: boolean;
   onWorksSaturdayChange?: (works: boolean) => void;
+  saturdayPlan?: SaturdayPlanType;
+  onSaturdayPlanChange?: (plan: SaturdayPlanType) => void;
   saturdayShift?: string;
   onSaturdayShiftChange?: (newSatShift: string) => void;
+  saturdayReferenceDate?: string;
+  onSaturdayReferenceDateChange?: (newDate: string) => void;
   companyOperatingHours?: CompanyOperatingHours;
 }
 
@@ -55,8 +61,12 @@ export const ShiftConfigurator: React.FC<ShiftConfiguratorProps> = ({
   accentColor = 'indigo',
   worksSaturday = false,
   onWorksSaturdayChange,
+  saturdayPlan,
+  onSaturdayPlanChange,
   saturdayShift = 'Continua (09:00 - 14:00)',
   onSaturdayShiftChange,
+  saturdayReferenceDate,
+  onSaturdayReferenceDateChange,
   companyOperatingHours,
 }) => {
   const [detail, setDetail] = useState<ShiftDetail>(() => parseShiftString(value));
@@ -101,6 +111,20 @@ export const ShiftConfigurator: React.FC<ShiftConfiguratorProps> = ({
     updateSatDetail(updated);
   };
 
+  // Saturday planning calculations
+  const effectiveSatPlan: SaturdayPlanType = saturdayPlan ?? (worksSaturday ? 'TODOS' : 'NO');
+  const isSatAlternating = effectiveSatPlan === 'ALTERNO_A' || effectiveSatPlan === 'ALTERNO_B';
+  const worksAnySaturday = effectiveSatPlan !== 'NO';
+
+  const handleSelectSatPlan = (newPlan: SaturdayPlanType) => {
+    if (onSaturdayPlanChange) {
+      onSaturdayPlanChange(newPlan);
+    }
+    if (onWorksSaturdayChange) {
+      onWorksSaturdayChange(newPlan !== 'NO');
+    }
+  };
+
   // Computations
   const continuaMinutes = calculateMinutesBetween(detail.cStart, detail.cEnd);
   const t1Minutes = calculateMinutesBetween(detail.t1Start, detail.t1End);
@@ -117,9 +141,28 @@ export const ShiftConfigurator: React.FC<ShiftConfiguratorProps> = ({
 
   const totalWeeklyHoursCalculated = computeTotalWeeklyHours(
     formatShiftString(detail),
-    worksSaturday,
-    formatShiftString(satDetail)
+    worksAnySaturday,
+    formatShiftString(satDetail),
+    false,
+    undefined,
+    effectiveSatPlan
   );
+
+  const nextSat = getNextSaturday(new Date());
+  const nextSatFormatted = nextSat.toLocaleDateString('es-ES', {
+    weekday: 'short',
+    day: 'numeric',
+    month: 'short',
+  });
+  const nextSatWeek = calculateWeekAorB(saturdayReferenceDate, nextSat);
+  const worksNextSat =
+    effectiveSatPlan === 'TODOS'
+      ? true
+      : effectiveSatPlan === 'ALTERNO_A'
+      ? nextSatWeek === 'A'
+      : effectiveSatPlan === 'ALTERNO_B'
+      ? nextSatWeek === 'B'
+      : false;
 
   const isPurple = accentColor === 'purple';
   const headerBg = isPurple ? 'bg-purple-50/60 border-purple-100' : 'bg-indigo-50/60 border-indigo-100';
@@ -149,9 +192,18 @@ export const ShiftConfigurator: React.FC<ShiftConfiguratorProps> = ({
             >
               {badgeText || (detail.type === 'partida' ? '🌗 L-V Partida (2T)' : '☀️ L-V Continua')}
             </span>
-            {worksSaturday && (
+            {effectiveSatPlan === 'NO' ? (
+              <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-slate-100 text-slate-600 border border-slate-200">
+                Sábados Libres
+              </span>
+            ) : isSatAlternating ? (
+              <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-purple-100 text-purple-700 border border-purple-200 flex items-center gap-1">
+                <span className="material-symbols-outlined text-xs">sync_alt</span>
+                Sábado sí/no ({effectiveSatPlan === 'ALTERNO_A' ? 'Grupo A' : 'Grupo B'})
+              </span>
+            ) : (
               <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-blue-50 text-blue-700 border border-blue-200">
-                + Sábado
+                + Todos los Sábados
               </span>
             )}
           </div>
@@ -373,34 +425,192 @@ export const ShiftConfigurator: React.FC<ShiftConfiguratorProps> = ({
       {/* ---------------------------------------------------- */}
       {/* SECCIÓN 2: HORARIO DE SÁBADOS                        */}
       {/* ---------------------------------------------------- */}
-      {onWorksSaturdayChange && (
-        <div className="bg-white p-3.5 sm:p-4 rounded-2xl border border-slate-200/90 shadow-2xs space-y-3">
+      {(onWorksSaturdayChange || onSaturdayPlanChange) && (
+        <div className="bg-white p-3.5 sm:p-4 rounded-2xl border border-slate-200/90 shadow-2xs space-y-3.5">
           <div className="flex flex-wrap justify-between items-center gap-2 pb-2 border-b border-slate-100">
-            <span className="text-xs font-black text-slate-900 flex items-center gap-1.5 uppercase tracking-wide">
-              <span className="material-symbols-outlined text-sm text-blue-600">weekend</span>
-              <span>2. Jornada de Sábado</span>
-            </span>
-
-            {/* Saturday Toggle */}
-            <div className="flex items-center gap-2">
-              <button
-                type="button"
-                onClick={() => onWorksSaturdayChange(!worksSaturday)}
-                className={`py-1 px-3 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer border ${
-                  worksSaturday
-                    ? 'bg-blue-600 text-white border-blue-600 shadow-xs'
-                    : 'bg-slate-100 text-slate-600 border-slate-200 hover:bg-slate-200'
-                }`}
-              >
-                <span className="material-symbols-outlined text-sm">
-                  {worksSaturday ? 'check_circle' : 'do_not_disturb_on'}
-                </span>
-                <span>{worksSaturday ? 'Trabaja Sábados' : 'Sábados Libres (Descanso)'}</span>
-              </button>
+            <div className="flex items-center gap-1.5">
+              <span className="material-symbols-outlined text-base text-blue-600">weekend</span>
+              <span className="text-xs font-black text-slate-900 uppercase tracking-wide">
+                2. Planificación de Sábados
+              </span>
             </div>
+            <span className="text-[11px] font-semibold text-slate-500">
+              {effectiveSatPlan === 'NO'
+                ? '0 sábados al mes'
+                : isSatAlternating
+                ? '1 sábado sí / 1 sábado no (50%)'
+                : '100% sábados'}
+            </span>
           </div>
 
-          {worksSaturday ? (
+          {/* Saturday 3-Option Plan Selector */}
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+            {/* Opción 1: No trabaja sábados */}
+            <button
+              type="button"
+              onClick={() => handleSelectSatPlan('NO')}
+              className={`p-2.5 rounded-xl border-2 text-left transition-all cursor-pointer flex flex-col justify-between ${
+                effectiveSatPlan === 'NO'
+                  ? 'bg-slate-900 text-white border-slate-900 shadow-xs'
+                  : 'bg-slate-50 text-slate-700 border-slate-200 hover:border-slate-300 hover:bg-slate-100'
+              }`}
+            >
+              <div className="flex items-center justify-between mb-1">
+                <span className="material-symbols-outlined text-lg">
+                  {effectiveSatPlan === 'NO' ? 'check_circle' : 'event_busy'}
+                </span>
+                <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded ${
+                  effectiveSatPlan === 'NO' ? 'bg-white/20 text-white' : 'bg-slate-200 text-slate-600'
+                }`}>
+                  L - V
+                </span>
+              </div>
+              <div className="text-xs font-bold">Sábados Libres</div>
+              <div className={`text-[10px] mt-0.5 ${effectiveSatPlan === 'NO' ? 'text-slate-300' : 'text-slate-500'}`}>
+                No trabaja sábados
+              </div>
+            </button>
+
+            {/* Opción 2: Sábado sí, sábado no (Alterno) */}
+            <button
+              type="button"
+              onClick={() => handleSelectSatPlan(effectiveSatPlan === 'ALTERNO_B' ? 'ALTERNO_B' : 'ALTERNO_A')}
+              className={`p-2.5 rounded-xl border-2 text-left transition-all cursor-pointer flex flex-col justify-between ${
+                isSatAlternating
+                  ? 'bg-purple-700 text-white border-purple-700 shadow-xs ring-2 ring-purple-300/40'
+                  : 'bg-purple-50/50 text-purple-900 border-purple-200 hover:border-purple-300 hover:bg-purple-50'
+              }`}
+            >
+              <div className="flex items-center justify-between mb-1">
+                <span className="material-symbols-outlined text-lg">
+                  {isSatAlternating ? 'check_circle' : 'sync_alt'}
+                </span>
+                <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded ${
+                  isSatAlternating ? 'bg-white/20 text-white' : 'bg-purple-100 text-purple-700'
+                }`}>
+                  1 Sí / 1 No
+                </span>
+              </div>
+              <div className="text-xs font-bold">Sábados Alternos</div>
+              <div className={`text-[10px] mt-0.5 ${isSatAlternating ? 'text-purple-200' : 'text-purple-600'}`}>
+                Un sábado sí y otro no
+              </div>
+            </button>
+
+            {/* Opción 3: Todos los sábados */}
+            <button
+              type="button"
+              onClick={() => handleSelectSatPlan('TODOS')}
+              className={`p-2.5 rounded-xl border-2 text-left transition-all cursor-pointer flex flex-col justify-between ${
+                effectiveSatPlan === 'TODOS'
+                  ? 'bg-blue-600 text-white border-blue-600 shadow-xs'
+                  : 'bg-blue-50/50 text-blue-900 border-blue-200 hover:border-blue-300 hover:bg-blue-50'
+              }`}
+            >
+              <div className="flex items-center justify-between mb-1">
+                <span className="material-symbols-outlined text-lg">
+                  {effectiveSatPlan === 'TODOS' ? 'check_circle' : 'event_available'}
+                </span>
+                <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded ${
+                  effectiveSatPlan === 'TODOS' ? 'bg-white/20 text-white' : 'bg-blue-100 text-blue-700'
+                }`}>
+                  Todos
+                </span>
+              </div>
+              <div className="text-xs font-bold">Todos los Sábados</div>
+              <div className={`text-[10px] mt-0.5 ${effectiveSatPlan === 'TODOS' ? 'text-blue-200' : 'text-blue-600'}`}>
+                Fijo cada semana
+              </div>
+            </button>
+          </div>
+
+          {/* Subpanel cuando se eligen Sábados Alternos (1 Sí / 1 No) */}
+          {isSatAlternating && (
+            <div className="bg-purple-50/80 border border-purple-200 rounded-2xl p-3 sm:p-3.5 space-y-3">
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <div className="flex items-center gap-1.5 text-purple-950 font-bold text-xs">
+                  <span className="material-symbols-outlined text-sm text-purple-700">group_work</span>
+                  <span>Grupo de Alternancia (Turnos de Sábado):</span>
+                </div>
+                <div className="text-[11px] text-purple-700 font-medium">
+                  Coordina quién libra cada fin de semana
+                </div>
+              </div>
+
+              {/* Botones Selector de Grupo A vs Grupo B */}
+              <div className="grid grid-cols-2 gap-2">
+                <button
+                  type="button"
+                  onClick={() => handleSelectSatPlan('ALTERNO_A')}
+                  className={`p-2 rounded-xl border text-left transition-all cursor-pointer ${
+                    effectiveSatPlan === 'ALTERNO_A'
+                      ? 'bg-white text-purple-950 border-purple-500 shadow-xs font-bold ring-1 ring-purple-400'
+                      : 'bg-white/50 text-slate-600 border-purple-200 hover:bg-white'
+                  }`}
+                >
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs font-black">Grupo A</span>
+                    {effectiveSatPlan === 'ALTERNO_A' && (
+                      <span className="text-[10px] font-bold bg-purple-100 text-purple-800 px-1.5 py-0.2 rounded">
+                        Activo
+                      </span>
+                    )}
+                  </div>
+                  <div className="text-[11px] text-slate-500 mt-0.5">
+                    Sábados de Semana A
+                  </div>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => handleSelectSatPlan('ALTERNO_B')}
+                  className={`p-2 rounded-xl border text-left transition-all cursor-pointer ${
+                    effectiveSatPlan === 'ALTERNO_B'
+                      ? 'bg-white text-purple-950 border-purple-500 shadow-xs font-bold ring-1 ring-purple-400'
+                      : 'bg-white/50 text-slate-600 border-purple-200 hover:bg-white'
+                  }`}
+                >
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs font-black">Grupo B</span>
+                    {effectiveSatPlan === 'ALTERNO_B' && (
+                      <span className="text-[10px] font-bold bg-purple-100 text-purple-800 px-1.5 py-0.2 rounded">
+                        Activo
+                      </span>
+                    )}
+                  </div>
+                  <div className="text-[11px] text-slate-500 mt-0.5">
+                    Sábados de Semana B
+                  </div>
+                </button>
+              </div>
+
+              {/* Live Upcoming Saturday Status Badge */}
+              <div className="flex flex-wrap items-center justify-between gap-2 p-2.5 rounded-xl bg-white border border-purple-100 shadow-2xs">
+                <div className="flex items-center gap-1.5 text-xs text-slate-700">
+                  <span className="material-symbols-outlined text-sm text-purple-600">event</span>
+                  <span>
+                    Próximo sábado (<b>{nextSatFormatted}</b>):
+                  </span>
+                </div>
+                <div>
+                  {worksNextSat ? (
+                    <span className="inline-flex items-center gap-1 text-xs font-bold text-emerald-800 bg-emerald-100/90 border border-emerald-300 px-2.5 py-0.5 rounded-full">
+                      <span className="w-2 h-2 rounded-full bg-emerald-600 animate-pulse"></span>
+                      Le toca trabajar
+                    </span>
+                  ) : (
+                    <span className="inline-flex items-center gap-1 text-xs font-bold text-slate-700 bg-slate-100 border border-slate-300 px-2.5 py-0.5 rounded-full">
+                      <span className="w-2 h-2 rounded-full bg-slate-400"></span>
+                      Descanso (le toca el siguiente)
+                    </span>
+                  )}
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Configuración de horario cuando trabaja sábados (Todos o Alternos) */}
+          {worksAnySaturday ? (
             <div className="space-y-3 pt-1">
               {/* Option to load company saturday hours */}
               {companySatConfig?.enabled && companySatString && (
@@ -564,15 +774,22 @@ export const ShiftConfigurator: React.FC<ShiftConfiguratorProps> = ({
                 </div>
               </div>
 
-              <div className="text-xs text-blue-900 bg-blue-50/60 p-2 rounded-xl border border-blue-100 flex items-center justify-between">
-                <span>Horas de Sábado:</span>
-                <span className="font-mono font-bold">{formatMinutesToHours(satDailyMins)}</span>
+              <div className="text-xs text-blue-900 bg-blue-50/60 p-2.5 rounded-xl border border-blue-100 flex flex-wrap items-center justify-between gap-1">
+                <span>Horas de cada Sábado laborable:</span>
+                <div className="flex items-center gap-2">
+                  <span className="font-mono font-bold">{formatMinutesToHours(satDailyMins)}</span>
+                  {isSatAlternating && (
+                    <span className="text-[11px] font-medium text-purple-700 bg-purple-100 px-2 py-0.2 rounded-md">
+                      Promedio semanal: {formatMinutesToHours(Math.round(satDailyMins / 2))}
+                    </span>
+                  )}
+                </div>
               </div>
             </div>
           ) : (
             <div className="text-xs text-slate-500 bg-slate-50 p-2.5 rounded-xl border border-slate-200/70 flex items-center gap-2">
               <span className="material-symbols-outlined text-sm text-slate-400">event_busy</span>
-              <span>El empleado no presta servicios los sábados (jornada de lunes a viernes).</span>
+              <span>El empleado no presta servicios los sábados (jornada exclusiva de lunes a viernes).</span>
             </div>
           )}
         </div>
@@ -586,19 +803,37 @@ export const ShiftConfigurator: React.FC<ShiftConfiguratorProps> = ({
           <span className="text-[10px] font-bold uppercase tracking-wider text-indigo-300 block">
             Cómputo Total Semanal
           </span>
-          <div className="text-xs text-indigo-100 flex items-center gap-2 mt-0.5">
+          <div className="text-xs text-indigo-100 flex flex-wrap items-center gap-2 mt-0.5">
             <span>5d L-V ({formatMinutesToHours(dailyWeekdayMins * 5)})</span>
-            {worksSaturday && (
+            {effectiveSatPlan === 'TODOS' && (
               <>
                 <span>+</span>
                 <span>Sáb ({formatMinutesToHours(satDailyMins)})</span>
               </>
             )}
+            {isSatAlternating && (
+              <>
+                <span>+</span>
+                <span className="text-purple-300 font-medium">
+                  Sáb alterno ({formatMinutesToHours(satDailyMins)} cada 2 semanas = +{formatMinutesToHours(Math.round(satDailyMins / 2))} media)
+                </span>
+              </>
+            )}
+            {effectiveSatPlan === 'NO' && (
+              <span className="text-indigo-300 font-medium">• Sábados libres</span>
+            )}
           </div>
+          {isSatAlternating && (
+            <div className="text-[11px] text-indigo-300/80 mt-1">
+              Semana con sábado: {formatMinutesToHours(dailyWeekdayMins * 5 + satDailyMins)} • Semana sin sábado: {formatMinutesToHours(dailyWeekdayMins * 5)}
+            </div>
+          )}
         </div>
         <div className="flex items-baseline gap-1 bg-white/10 px-3.5 py-1.5 rounded-xl border border-white/15">
           <span className="text-xl font-black text-white font-mono">{totalWeeklyHoursCalculated}</span>
-          <span className="text-xs font-semibold text-indigo-200">horas/semana</span>
+          <span className="text-xs font-semibold text-indigo-200">
+            {isSatAlternating ? 'h/sem (media)' : 'horas/semana'}
+          </span>
         </div>
       </div>
     </div>

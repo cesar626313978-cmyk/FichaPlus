@@ -152,6 +152,7 @@ const INITIAL_EMPLOYEES: EmployeeRecord[] = [
     shiftWeekA: 'Continua (08:00 - 16:00)',
     shiftWeekB: 'Partida (09:00 - 14:00 / 16:00 - 19:00)',
     worksSaturday: true,
+    saturdayPlan: 'ALTERNO_A', // Sábados alternos (1 sí / 1 no) - Grupo A
     saturdayShift: 'Continua (09:00 - 14:00)',
     joinedDate: '2022-03-15',
     pinCode: '1234',
@@ -173,6 +174,7 @@ const INITIAL_EMPLOYEES: EmployeeRecord[] = [
     shiftWeekA: 'Continua (08:00 - 16:00)',
     shiftWeekB: 'Continua (08:00 - 16:00)',
     worksSaturday: false,
+    saturdayPlan: 'NO', // No trabaja sábados
     joinedDate: '2023-01-10',
     pinCode: '5678',
   },
@@ -194,6 +196,7 @@ const INITIAL_EMPLOYEES: EmployeeRecord[] = [
     shiftWeekA: 'Continua (08:00 - 16:00)',
     shiftWeekB: 'Continua (15:00 - 23:00)',
     worksSaturday: true,
+    saturdayPlan: 'ALTERNO_B', // Sábados alternos (1 sí / 1 no) - Grupo B (se turna con Grupo A)
     saturdayShift: 'Continua (09:00 - 14:00)',
     joinedDate: '2021-09-01',
     pinCode: '9012',
@@ -215,6 +218,7 @@ const INITIAL_EMPLOYEES: EmployeeRecord[] = [
     shiftWeekA: 'Partida (09:00 - 14:00 / 16:00 - 19:00)',
     shiftWeekB: 'Partida (09:00 - 14:00 / 16:00 - 19:00)',
     worksSaturday: true,
+    saturdayPlan: 'TODOS', // Trabaja todos los sábados
     saturdayShift: 'Partida (10:00 - 14:00 / 17:00 - 20:30)',
     joinedDate: '2024-02-15',
     pinCode: '3456',

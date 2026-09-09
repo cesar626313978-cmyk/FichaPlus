@@ -1,4 +1,4 @@
-import { EmployeeRecord, WorkdayPlanType, DayScheduleConfig } from '../types';
+import { EmployeeRecord, WorkdayPlanType, DayScheduleConfig, SaturdayPlanType } from '../types';
 
 export interface ShiftDetail {
   type: WorkdayPlanType; // 'continua' | 'partida'
@@ -27,7 +27,11 @@ export interface EmployeeShiftInfo {
   isTodaySaturday?: boolean;
   isTodaySunday?: boolean;
   worksSaturday?: boolean;
+  saturdayPlan?: SaturdayPlanType;
   saturdayShift?: string;
+  isSaturdayWorkingToday?: boolean;
+  nextSaturdayDate?: string;
+  nextSaturdayWorking?: boolean;
   worksSunday?: boolean;
   sundayShift?: string;
   isDayOffToday?: boolean;
@@ -95,20 +99,26 @@ export function computeShiftMinutes(shiftStr?: string): number {
 }
 
 /**
- * Computes weekly working hours given weekday and weekend schedules.
+ * Computes weekly working hours given weekday and weekend schedules and Saturday plan.
  */
 export function computeTotalWeeklyHours(
   monFriShiftStr: string,
   worksSaturday: boolean = false,
   saturdayShiftStr?: string,
   worksSunday: boolean = false,
-  sundayShiftStr?: string
+  sundayShiftStr?: string,
+  saturdayPlan: SaturdayPlanType = worksSaturday ? 'TODOS' : 'NO'
 ): number {
   const weekdayDailyMins = computeShiftMinutes(monFriShiftStr);
   let totalMins = weekdayDailyMins * 5;
 
-  if (worksSaturday && saturdayShiftStr) {
-    totalMins += computeShiftMinutes(saturdayShiftStr);
+  if (saturdayShiftStr) {
+    if (saturdayPlan === 'TODOS' || (worksSaturday && !saturdayPlan)) {
+      totalMins += computeShiftMinutes(saturdayShiftStr);
+    } else if (saturdayPlan === 'ALTERNO_A' || saturdayPlan === 'ALTERNO_B') {
+      // 1 Saturday every 2 weeks -> half of saturday minutes on average weekly
+      totalMins += Math.round(computeShiftMinutes(saturdayShiftStr) / 2);
+    }
   }
 
   if (worksSunday && sundayShiftStr) {
@@ -202,12 +212,13 @@ export function parseShiftString(str?: string): ShiftDetail {
 
 /**
  * Calculates whether the given date belongs to Week A or Week B based on a rotation start date.
+ * If no start date is given, uses a consistent company-wide base Monday ('2026-01-05')
+ * to keep alternating weeks synchronized across all employees.
  */
 export function calculateWeekAorB(rotationStartDateStr?: string, targetDate: Date = new Date()): 'A' | 'B' {
-  if (!rotationStartDateStr) return 'A';
-
   try {
-    const start = new Date(rotationStartDateStr);
+    const refStr = rotationStartDateStr || '2026-01-05';
+    const start = new Date(refStr);
     if (isNaN(start.getTime())) return 'A';
 
     // Normalize start date to Monday 00:00
@@ -234,8 +245,134 @@ export function calculateWeekAorB(rotationStartDateStr?: string, targetDate: Dat
 }
 
 /**
+ * Returns the effective Saturday planning type for an employee.
+ * Backwards compatible with worksSaturday boolean.
+ */
+export function getEffectiveSaturdayPlan(employee?: EmployeeRecord | null): SaturdayPlanType {
+  if (!employee) return 'NO';
+  if (employee.saturdayPlan) return employee.saturdayPlan;
+  if (employee.worksSaturday === false) return 'NO';
+  if (employee.worksSaturday === true) return 'TODOS';
+  return 'NO';
+}
+
+/**
+ * Returns the upcoming Saturday (or today if today is Saturday).
+ */
+export function getNextSaturday(from: Date = new Date()): Date {
+  const d = new Date(from);
+  const day = d.getDay(); // 0 = Sun, 6 = Sat, 1..5 = Mon..Fri
+  const daysUntil = (6 - day + 7) % 7;
+  const target = new Date(d);
+  target.setDate(d.getDate() + (daysUntil === 0 ? 0 : daysUntil));
+  target.setHours(0, 0, 0, 0);
+  return target;
+}
+
+/**
+ * Determines whether an employee works on a specific Saturday date based on their saturdayPlan:
+ * - 'NO': Never works Saturdays
+ * - 'TODOS': Works every Saturday
+ * - 'ALTERNO_A': Works on Week A Saturdays (every other Saturday)
+ * - 'ALTERNO_B': Works on Week B Saturdays (every other Saturday)
+ */
+export function doesEmployeeWorkSaturday(
+  employee: EmployeeRecord | null | undefined,
+  targetSaturday: Date = new Date()
+): boolean {
+  if (!employee) return false;
+  const plan = getEffectiveSaturdayPlan(employee);
+  if (plan === 'NO') return false;
+  if (plan === 'TODOS') return true;
+
+  const refDate = employee.saturdayReferenceDate || employee.rotationStartDate || '2026-01-05';
+  const week = calculateWeekAorB(refDate, targetSaturday);
+
+  if (plan === 'ALTERNO_A') return week === 'A';
+  if (plan === 'ALTERNO_B') return week === 'B';
+  return false;
+}
+
+export interface SaturdayBadgeInfo {
+  plan: SaturdayPlanType;
+  label: string;
+  shortLabel: string;
+  badgeClass: string;
+  icon: string;
+  isAlternating: boolean;
+  worksUpcomingSaturday: boolean;
+  upcomingDateFormatted: string;
+  description: string;
+}
+
+/**
+ * Formats a comprehensive Saturday schedule badge for tables and cards.
+ */
+export function getSaturdayScheduleBadge(
+  employee: EmployeeRecord,
+  referenceDate: Date = new Date()
+): SaturdayBadgeInfo {
+  const plan = getEffectiveSaturdayPlan(employee);
+  const nextSat = getNextSaturday(referenceDate);
+  const worksUpcoming = doesEmployeeWorkSaturday(employee, nextSat);
+  const dateFormatted = nextSat.toLocaleDateString('es-ES', { day: 'numeric', month: 'short' });
+
+  switch (plan) {
+    case 'NO':
+      return {
+        plan,
+        label: 'Sábados Libres',
+        shortLabel: 'Libre',
+        badgeClass: 'bg-slate-100 text-slate-600 border-slate-200',
+        icon: 'event_busy',
+        isAlternating: false,
+        worksUpcomingSaturday: false,
+        upcomingDateFormatted: dateFormatted,
+        description: 'No trabaja sábados (jornada de L-V)',
+      };
+    case 'ALTERNO_A':
+      return {
+        plan,
+        label: 'Sábados Alternos (Grupo A)',
+        shortLabel: 'Alterno (G.A)',
+        badgeClass: 'bg-purple-100 text-purple-700 border-purple-200',
+        icon: 'sync_alt',
+        isAlternating: true,
+        worksUpcomingSaturday: worksUpcoming,
+        upcomingDateFormatted: dateFormatted,
+        description: `1 Sábado Sí / 1 No (Semana A) • ${worksUpcoming ? `Trabaja el sáb. ${dateFormatted}` : `Descansa el sáb. ${dateFormatted}`}`,
+      };
+    case 'ALTERNO_B':
+      return {
+        plan,
+        label: 'Sábados Alternos (Grupo B)',
+        shortLabel: 'Alterno (G.B)',
+        badgeClass: 'bg-indigo-100 text-indigo-700 border-indigo-200',
+        icon: 'sync_alt',
+        isAlternating: true,
+        worksUpcomingSaturday: worksUpcoming,
+        upcomingDateFormatted: dateFormatted,
+        description: `1 Sábado Sí / 1 No (Semana B) • ${worksUpcoming ? `Trabaja el sáb. ${dateFormatted}` : `Descansa el sáb. ${dateFormatted}`}`,
+      };
+    case 'TODOS':
+    default:
+      return {
+        plan,
+        label: `Todos los Sábados`,
+        shortLabel: 'Todos Sáb',
+        badgeClass: 'bg-blue-100 text-blue-700 border-blue-200',
+        icon: 'event_available',
+        isAlternating: false,
+        worksUpcomingSaturday: true,
+        upcomingDateFormatted: dateFormatted,
+        description: `Trabaja todos los sábados • ${employee.saturdayShift || '09:00 - 14:00'}`,
+      };
+  }
+}
+
+/**
  * Computes the full shift schedule information for any employee on a specific date.
- * Handles Monday-Friday, Saturdays, and Sundays seamlessly.
+ * Handles Monday-Friday, alternating Saturdays, and Sundays seamlessly.
  */
 export function getEmployeeShiftInfo(
   employee: EmployeeRecord | null | undefined,
@@ -262,32 +399,47 @@ export function getEmployeeShiftInfo(
   const shiftWeekA = employee.shiftWeekA || 'Continua (08:00 - 16:00)';
   const shiftWeekB = employee.shiftWeekB || 'Partida (09:00 - 14:00 / 16:00 - 19:00)';
 
-  const worksSaturday = Boolean(employee.worksSaturday);
+  const satPlan = getEffectiveSaturdayPlan(employee);
+  const worksSaturday = satPlan !== 'NO';
   const saturdayShift = employee.saturdayShift || 'Continua (09:00 - 14:00)';
   const worksSunday = Boolean(employee.worksSunday);
   const sundayShift = employee.sundayShift || 'Continua (09:00 - 14:00)';
 
-  // Calculate current week letter for rotating shifts
-  const currentWeek = hasRotation ? calculateWeekAorB(employee.rotationStartDate, targetDate) : 'A';
+  // Calculate current week letter for rotating shifts or alternating Saturdays
+  const currentWeek = calculateWeekAorB(
+    employee.rotationStartDate || employee.saturdayReferenceDate,
+    targetDate
+  );
   const activeWeekdayShift = currentWeek === 'A' ? shiftWeekA : shiftWeekB;
   const nextWeekdayShift = currentWeek === 'A' ? shiftWeekB : shiftWeekA;
+
+  const nextSat = getNextSaturday(targetDate);
+  const nextSaturdayDate = nextSat.toLocaleDateString('es-ES', { day: 'numeric', month: 'long' });
+  const nextSaturdayWorking = doesEmployeeWorkSaturday(employee, nextSat);
+  const isSaturdayWorkingToday = isSaturday && doesEmployeeWorkSaturday(employee, targetDate);
 
   const totalWeeklyHours = computeTotalWeeklyHours(
     activeWeekdayShift,
     worksSaturday,
     saturdayShift,
     worksSunday,
-    sundayShift
+    sundayShift,
+    satPlan
   );
 
   // CASE 1: TODAY IS SATURDAY
   if (isSaturday) {
-    if (worksSaturday) {
+    if (isSaturdayWorkingToday) {
       const activeSatShift =
         hasRotation && currentWeek === 'B' && employee.saturdayShiftWeekB
           ? employee.saturdayShiftWeekB
           : saturdayShift;
       const isPart = isShiftPartida(activeSatShift);
+      const isAlternating = satPlan === 'ALTERNO_A' || satPlan === 'ALTERNO_B';
+      const altTag = isAlternating
+        ? ` (Sábado Alterno - ${satPlan === 'ALTERNO_A' ? 'Grupo A' : 'Grupo B'})`
+        : '';
+
       return {
         hasRotatingShifts: hasRotation,
         rotationStartDate: employee.rotationStartDate,
@@ -295,38 +447,50 @@ export function getEmployeeShiftInfo(
         currentPlan: isPart ? 'partida' : 'continua',
         activeShiftName: activeSatShift,
         activeShiftShort: isPart ? 'Partida Sábado' : 'Continua Sábado',
-        scheduleSummary: `Sábado • ${activeSatShift}`,
+        scheduleSummary: `Sábado • ${activeSatShift}${altTag}`,
         nextWeekSummary: hasRotation ? `Próxima semana: Semana ${currentWeek === 'A' ? 'B' : 'A'}` : undefined,
         shiftWeekA,
         shiftWeekB,
         isTodaySaturday: true,
         worksSaturday: true,
+        saturdayPlan: satPlan,
         saturdayShift,
+        isSaturdayWorkingToday: true,
+        nextSaturdayDate,
+        nextSaturdayWorking,
         worksSunday,
         sundayShift,
         isDayOffToday: false,
-        todayShiftTitle: 'Turno de Sábado',
+        todayShiftTitle: `Turno de Sábado${altTag}`,
         totalWeeklyHours,
       };
     } else {
+      const isAlternating = satPlan === 'ALTERNO_A' || satPlan === 'ALTERNO_B';
+      const restReason = isAlternating
+        ? `Sábado de Descanso Alterno (${satPlan === 'ALTERNO_A' ? 'Semana B' : 'Semana A'})`
+        : 'Sábado • Día de Descanso';
       return {
         hasRotatingShifts: hasRotation,
         rotationStartDate: employee.rotationStartDate,
         currentWeekLetter: currentWeek,
         currentPlan: 'continua',
-        activeShiftName: 'Descanso Semanal',
+        activeShiftName: isAlternating ? 'Descanso (Sábado Alterno)' : 'Descanso Semanal',
         activeShiftShort: 'Descanso',
-        scheduleSummary: 'Sábado • Día de Descanso',
+        scheduleSummary: isAlternating ? `${restReason} • Le toca el próximo sábado` : restReason,
         nextWeekSummary: hasRotation ? `Próxima semana: Semana ${currentWeek === 'A' ? 'B' : 'A'}` : undefined,
         shiftWeekA,
         shiftWeekB,
         isTodaySaturday: true,
         worksSaturday: false,
+        saturdayPlan: satPlan,
         saturdayShift,
+        isSaturdayWorkingToday: false,
+        nextSaturdayDate,
+        nextSaturdayWorking,
         worksSunday,
         sundayShift,
         isDayOffToday: true,
-        todayShiftTitle: 'Sábado (Descanso)',
+        todayShiftTitle: isAlternating ? 'Sábado (Descanso Alterno)' : 'Sábado (Descanso)',
         totalWeeklyHours,
       };
     }
@@ -348,7 +512,11 @@ export function getEmployeeShiftInfo(
         shiftWeekB,
         isTodaySunday: true,
         worksSaturday,
+        saturdayPlan: satPlan,
         saturdayShift,
+        isSaturdayWorkingToday: false,
+        nextSaturdayDate,
+        nextSaturdayWorking,
         worksSunday: true,
         sundayShift,
         isDayOffToday: false,
@@ -368,7 +536,11 @@ export function getEmployeeShiftInfo(
         shiftWeekB,
         isTodaySunday: true,
         worksSaturday,
+        saturdayPlan: satPlan,
         saturdayShift,
+        isSaturdayWorkingToday: false,
+        nextSaturdayDate,
+        nextSaturdayWorking,
         worksSunday: false,
         sundayShift,
         isDayOffToday: true,
@@ -382,7 +554,14 @@ export function getEmployeeShiftInfo(
   const isPart = isShiftPartida(activeWeekdayShift);
   const plan: WorkdayPlanType = isPart ? 'partida' : 'continua';
 
-  const saturdayBadge = worksSaturday ? ` + Sáb (${saturdayShift.replace(/^Continua\s*|^Partida\s*/, '')})` : '';
+  let saturdayBadge = '';
+  if (satPlan === 'TODOS') {
+    saturdayBadge = ` + Sáb (${saturdayShift.replace(/^Continua\s*|^Partida\s*/, '')})`;
+  } else if (satPlan === 'ALTERNO_A') {
+    saturdayBadge = ` + Sáb alterno (G.A: ${nextSaturdayWorking ? 'Trabaja este sábado' : 'Descansa este sábado'})`;
+  } else if (satPlan === 'ALTERNO_B') {
+    saturdayBadge = ` + Sáb alterno (G.B: ${nextSaturdayWorking ? 'Trabaja este sábado' : 'Descansa este sábado'})`;
+  }
 
   let summary = '';
   if (hasRotation) {
@@ -392,9 +571,7 @@ export function getEmployeeShiftInfo(
   }
 
   const nextWeekSummary = hasRotation
-    ? `Semana ${currentWeek === 'A' ? 'B' : 'A'} • ${nextWeekdayShift}${
-        worksSaturday ? ` + Sáb (${saturdayShift.replace(/^Continua\s*|^Partida\s*/, '')})` : ''
-      }`
+    ? `Semana ${currentWeek === 'A' ? 'B' : 'A'} • ${nextWeekdayShift}${saturdayBadge}`
     : undefined;
 
   return {
@@ -411,7 +588,11 @@ export function getEmployeeShiftInfo(
     isTodaySaturday: false,
     isTodaySunday: false,
     worksSaturday,
+    saturdayPlan: satPlan,
     saturdayShift,
+    isSaturdayWorkingToday: false,
+    nextSaturdayDate,
+    nextSaturdayWorking,
     worksSunday,
     sundayShift,
     isDayOffToday: false,
