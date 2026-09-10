@@ -3,6 +3,7 @@ import { User, signInWithPopup, signOut as fbSignOut, onAuthStateChanged } from 
 import { doc, getDoc, setDoc } from 'firebase/firestore';
 import { auth, db, googleProvider } from '../firebase';
 import { UserProfile, EmployeeRecord } from '../types';
+import { MASTER_ADMIN_RECORD } from '../utils/employeeUtils';
 
 export interface AuthResult {
   success: boolean;
@@ -64,90 +65,7 @@ export const getKnownEmployees = (): EmployeeRecord[] => {
     }
   } catch (e) {}
 
-  return [
-    {
-      id: 'emp-001',
-      employeeNumber: 'EMP-001',
-      fullName: 'César Hernández Moreno',
-      dni: '12345678X',
-      email: 'cesar626313978@gmail.com',
-      phone: '+34 626 313 978',
-      department: 'Desarrollo & Tecnología',
-      jobTitle: 'Administrador / Responsable RRHH',
-      contractType: 'Indefinido',
-      weeklyHours: 40,
-      role: 'admin',
-      status: 'ACTIVO',
-      avatarUrl: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=250&q=80',
-      hasRotatingShifts: true,
-      rotationStartDate: '2026-08-01',
-      shiftWeekA: 'Mañana',
-      shiftWeekB: 'Tarde',
-      joinedDate: '2022-03-15',
-      pinCode: '1234',
-    },
-    {
-      id: 'emp-002',
-      employeeNumber: 'EMP-002',
-      fullName: 'Laura Gómez Martín',
-      dni: '87654321Y',
-      email: 'laura.gomez@empresa.com',
-      phone: '+34 611 223 344',
-      department: 'Diseño de Producto',
-      jobTitle: 'Product Designer',
-      contractType: 'Indefinido',
-      weeklyHours: 40,
-      role: 'employee',
-      status: 'VACACIONES',
-      avatarUrl: 'https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?auto=format&fit=crop&w=250&q=80',
-      hasRotatingShifts: false,
-      shiftWeekA: 'Mañana',
-      shiftWeekB: 'Mañana',
-      joinedDate: '2023-01-10',
-      pinCode: '5678',
-    },
-    {
-      id: 'emp-003',
-      employeeNumber: 'EMP-003',
-      fullName: 'Carlos Ruiz Delgado',
-      dni: '45678912Z',
-      email: 'carlos.ruiz@empresa.com',
-      phone: '+34 622 334 455',
-      department: 'Operaciones y Logística',
-      jobTitle: 'Coordinador de Turno',
-      contractType: 'Indefinido',
-      weeklyHours: 40,
-      role: 'employee',
-      status: 'BAJA_MEDICA',
-      avatarUrl: 'https://images.unsplash.com/photo-1560250097-0b93528c311a?auto=format&fit=crop&w=250&q=80',
-      hasRotatingShifts: true,
-      rotationStartDate: '2026-07-15',
-      shiftWeekA: 'Tarde',
-      shiftWeekB: 'Noche',
-      joinedDate: '2021-09-01',
-      pinCode: '9012',
-    },
-    {
-      id: 'emp-004',
-      employeeNumber: 'EMP-004',
-      fullName: 'María Rodríguez Santos',
-      dni: '78912345B',
-      email: 'maria.rodriguez@empresa.com',
-      phone: '+34 633 445 566',
-      department: 'Ventas y Clientes',
-      jobTitle: 'Account Executive',
-      contractType: 'Indefinido',
-      weeklyHours: 35,
-      role: 'employee',
-      status: 'ACTIVO',
-      avatarUrl: 'https://images.unsplash.com/photo-1580489944761-15a19d654956?auto=format&fit=crop&w=250&q=80',
-      hasRotatingShifts: false,
-      shiftWeekA: 'Partido',
-      shiftWeekB: 'Partido',
-      joinedDate: '2024-02-15',
-      pinCode: '3456',
-    },
-  ];
+  return [MASTER_ADMIN_RECORD];
 };
 
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {

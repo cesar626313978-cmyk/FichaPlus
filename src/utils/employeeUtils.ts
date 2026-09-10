@@ -242,8 +242,10 @@ export const reconcileAndDeduplicateEmployees = (
     storedList.forEach(addOrMergePerson);
   }
 
-  // If the list is completely empty, initialize with initial company employees
-  if (seenPersons.length === 0 && Array.isArray(initialEmployees) && initialEmployees.length > 0) {
+  // Only initialize with initial employees if storedList was completely empty/undefined,
+  // AND initialEmployees was explicitly provided, AND no company reset flag exists.
+  const isReset = typeof window !== 'undefined' && localStorage.getItem('fichaplus_is_reset') === 'true';
+  if (!isReset && (!storedList || storedList.length === 0) && seenPersons.length === 0 && Array.isArray(initialEmployees) && initialEmployees.length > 0) {
     for (const initEmp of initialEmployees) {
       if (!isExplicitlyDeleted(initEmp.id)) {
         addOrMergePerson(initEmp);

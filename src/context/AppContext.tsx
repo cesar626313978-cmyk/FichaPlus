@@ -7,6 +7,7 @@ import {
   setDoc,
   doc,
   deleteDoc,
+  getDocs,
   query,
   orderBy,
   limit,
@@ -143,104 +144,14 @@ interface AppContextType {
   installPWA: () => Promise<void>;
 }
 
-const INITIAL_EMPLOYEES: EmployeeRecord[] = [
-  {
-    id: 'emp-001',
-    employeeNumber: 'EMP-001',
-    fullName: 'César Hernández Moreno',
-    dni: '12345678X',
-    email: 'cesar626313978@gmail.com',
-    phone: '+34 626 313 978',
-    department: 'Desarrollo & Tecnología',
-    jobTitle: 'Desarrollador Senior / RRHH',
-    contractType: 'Indefinido',
-    weeklyHours: 40,
-    status: 'ACTIVO',
-    avatarUrl: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=250&q=80',
-    hasRotatingShifts: true,
-    rotationStartDate: '2026-08-01',
-    shiftWeekA: 'Continua (08:00 - 16:00)',
-    shiftWeekB: 'Partida (09:00 - 14:00 / 16:00 - 19:00)',
-    worksSaturday: true,
-    saturdayPlan: 'ALTERNO_A', // Sábados alternos (1 sí / 1 no) - Grupo A
-    saturdayShift: 'Continua (09:00 - 14:00)',
-    joinedDate: '2022-03-15',
-    pinCode: '1234',
-  },
-  {
-    id: 'emp-002',
-    employeeNumber: 'EMP-002',
-    fullName: 'Laura Gómez Martín',
-    dni: '87654321Y',
-    email: 'laura.gomez@empresa.com',
-    phone: '+34 611 223 344',
-    department: 'Diseño de Producto',
-    jobTitle: 'Product Designer',
-    contractType: 'Indefinido',
-    weeklyHours: 40,
-    status: 'VACACIONES',
-    avatarUrl: 'https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?auto=format&fit=crop&w=250&q=80',
-    hasRotatingShifts: false,
-    shiftWeekA: 'Continua (08:00 - 16:00)',
-    shiftWeekB: 'Continua (08:00 - 16:00)',
-    worksSaturday: false,
-    saturdayPlan: 'NO', // No trabaja sábados
-    joinedDate: '2023-01-10',
-    pinCode: '5678',
-  },
-  {
-    id: 'emp-003',
-    employeeNumber: 'EMP-003',
-    fullName: 'Carlos Ruiz Delgado',
-    dni: '45678912Z',
-    email: 'carlos.ruiz@empresa.com',
-    phone: '+34 622 334 455',
-    department: 'Operaciones y Logística',
-    jobTitle: 'Coordinador de Turno',
-    contractType: 'Indefinido',
-    weeklyHours: 40,
-    status: 'BAJA_MEDICA',
-    avatarUrl: 'https://images.unsplash.com/photo-1560250097-0b93528c311a?auto=format&fit=crop&w=250&q=80',
-    hasRotatingShifts: true,
-    rotationStartDate: '2026-08-01',
-    shiftWeekA: 'Continua (08:00 - 16:00)',
-    shiftWeekB: 'Continua (15:00 - 23:00)',
-    worksSaturday: true,
-    saturdayPlan: 'ALTERNO_B', // Sábados alternos (1 sí / 1 no) - Grupo B (se turna con Grupo A)
-    saturdayShift: 'Continua (09:00 - 14:00)',
-    joinedDate: '2021-09-01',
-    pinCode: '9012',
-  },
-  {
-    id: 'emp-004',
-    employeeNumber: 'EMP-004',
-    fullName: 'María Rodríguez Santos',
-    dni: '78912345B',
-    email: 'maria.rodriguez@empresa.com',
-    phone: '+34 633 445 566',
-    department: 'Ventas y Clientes',
-    jobTitle: 'Account Executive',
-    contractType: 'Indefinido',
-    weeklyHours: 35,
-    status: 'ACTIVO',
-    avatarUrl: 'https://images.unsplash.com/photo-1580489944761-15a19d654956?auto=format&fit=crop&w=250&q=80',
-    hasRotatingShifts: false,
-    shiftWeekA: 'Partida (09:00 - 14:00 / 16:00 - 19:00)',
-    shiftWeekB: 'Partida (09:00 - 14:00 / 16:00 - 19:00)',
-    worksSaturday: true,
-    saturdayPlan: 'TODOS', // Trabaja todos los sábados
-    saturdayShift: 'Partida (10:00 - 14:00 / 17:00 - 20:30)',
-    joinedDate: '2024-02-15',
-    pinCode: '3456',
-  },
-];
+const INITIAL_EMPLOYEES: EmployeeRecord[] = [MASTER_ADMIN_RECORD];
 
 const INITIAL_COMPANY: CompanySettings = {
-  companyName: 'Acme Corporation Ltd.',
+  companyName: 'FichaPlus',
   fiscalId: 'B-12345678',
   cccCode: '28 123456789 (Régimen General)',
-  workplaceAddress: 'Calle Mayor 45, Planta 2',
-  workplaceCity: 'Madrid, 28013',
+  workplaceAddress: 'Calle Principal 1',
+  workplaceCity: 'Madrid, 28001',
   collectiveAgreement: 'Convenio Colectivo Estatal del Sector de Oficinas y Despachos',
   annualHoursLimit: 1780,
   overtimeYearlyLimit: 80,
@@ -248,7 +159,7 @@ const INITIAL_COMPANY: CompanySettings = {
   weeklyRestHours: 36,
   paidPauseIncluded: true,
   hourBankEnabled: true,
-  primaryColor: '#facc15',
+  primaryColor: '#4f46e5',
   logoUrl: '',
   defaultLanguage: 'es',
   defaultTimezone: 'Europe/Madrid',
@@ -290,18 +201,26 @@ const INITIAL_COMPANY: CompanySettings = {
   },
 };
 
-const INITIAL_MONTHLY: MonthlyRecord = {
-  id: 'aug-2026',
-  userId: 'cesar-emp-01',
-  userName: 'César Hernández Moreno',
-  userDni: '12345678X',
-  month: 'Agosto 2026',
-  yearMonth: '2026-08',
-  ordinaryHours: 160,
-  extraHours: 4.5,
-  complementaryHours: 0,
-  isSigned: false,
+const getCleanMonthlyRecord = (admin?: Partial<EmployeeRecord>): MonthlyRecord => {
+  const now = new Date();
+  const currentYearMonth = now.toISOString().slice(0, 7);
+  const currentMonthLabel = now.toLocaleString('es-ES', { month: 'long', year: 'numeric' });
+  const capitalizedMonth = currentMonthLabel.charAt(0).toUpperCase() + currentMonthLabel.slice(1);
+  return {
+    id: `monthly-${Date.now()}`,
+    userId: admin?.id || 'emp-001',
+    userName: admin?.fullName || 'César Hernández Moreno',
+    userDni: admin?.dni || '12345678X',
+    month: capitalizedMonth,
+    yearMonth: currentYearMonth,
+    ordinaryHours: 0,
+    extraHours: 0,
+    complementaryHours: 0,
+    isSigned: false,
+  };
 };
+
+const INITIAL_MONTHLY: MonthlyRecord = getCleanMonthlyRecord();
 
 const INITIAL_ALARMS: AlarmItem[] = [
   {
@@ -339,281 +258,11 @@ const INITIAL_ALARMS: AlarmItem[] = [
   },
 ];
 
-const INITIAL_NOTIFICATIONS: AppNotification[] = [
-  {
-    id: 'notif-1',
-    title: 'Mes pendiente de firma',
-    message: 'Tienes que firmar el registro horario del mes de Agosto. Cumplimiento legal Art. 34.9 ET.',
-    type: 'urgent',
-    timestamp: 'Hace 10m',
-    read: false,
-    actionUrl: 'monthly_sign',
-    actionLabel: 'Firmar ahora',
-  },
-  {
-    id: 'notif-2',
-    title: 'Vacaciones Aprobadas',
-    message: 'Tus días del 15-25 de Agosto han sido aprobados por tu responsable.',
-    type: 'approval',
-    timestamp: 'Hace 1h',
-    read: false,
-  },
-  {
-    id: 'notif-3',
-    title: 'Incidencia en fichaje',
-    message: 'Olvidaste marcar la salida el lunes 23. Por favor, regulariza tu jornada.',
-    type: 'warning',
-    timestamp: 'Hace 2h',
-    read: false,
-    actionUrl: 'incidents',
-    actionLabel: 'Revisar',
-  },
-  {
-    id: 'notif-4',
-    title: 'Nueva política de empresa',
-    message: 'Se ha actualizado el documento de política de teletrabajo y registro de jornada.',
-    type: 'info',
-    timestamp: 'Ayer',
-    read: true,
-  },
-];
-
-const INITIAL_ENTRIES: TimeEntry[] = [
-  {
-    id: 'entry-1',
-    userId: 'cesar-emp-01',
-    userName: 'César Hernández Moreno',
-    date: '2026-08-01 (Lun)',
-    clockIn: '09:00',
-    clockOut: '18:00',
-    breakDurationMinutes: 60,
-    totalHoursWorked: 8.0,
-    workType: 'presencial',
-    isComplete: true,
-  },
-  {
-    id: 'entry-2',
-    userId: 'cesar-emp-01',
-    userName: 'César Hernández Moreno',
-    date: '2026-08-02 (Mar)',
-    clockIn: '09:00',
-    clockOut: '18:00',
-    breakDurationMinutes: 60,
-    totalHoursWorked: 8.0,
-    workType: 'teletrabajo',
-    isComplete: true,
-  },
-  {
-    id: 'entry-3',
-    userId: 'cesar-emp-01',
-    userName: 'César Hernández Moreno',
-    date: '2026-08-03 (Mié)',
-    clockIn: '09:00',
-    clockOut: '18:30',
-    breakDurationMinutes: 60,
-    totalHoursWorked: 8.5,
-    workType: 'presencial',
-    isComplete: true,
-  },
-  {
-    id: 'entry-4',
-    userId: 'cesar-emp-01',
-    userName: 'César Hernández Moreno',
-    date: '2026-08-04 (Jue)',
-    clockIn: '09:15',
-    clockOut: '18:15',
-    breakDurationMinutes: 60,
-    totalHoursWorked: 8.0,
-    workType: 'cliente',
-    isComplete: true,
-  },
-  {
-    id: 'entry-5',
-    userId: 'cesar-emp-01',
-    userName: 'César Hernández Moreno',
-    date: '2026-08-05 (Vie)',
-    clockIn: '--:--',
-    clockOut: '--:--',
-    breakDurationMinutes: 0,
-    totalHoursWorked: 0,
-    workType: 'presencial',
-    isComplete: true,
-    hasIncident: false,
-  },
-];
-
-const INITIAL_REQUESTS: TimeOffRequest[] = [
-  {
-    id: 'req-1',
-    userId: 'user-laura',
-    userName: 'Laura Gómez',
-    userAvatar: 'https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?auto=format&fit=crop&w=150&q=80',
-    department: 'Diseño',
-    leaveType: 'Vacaciones',
-    startDate: '2026-08-15',
-    endDate: '2026-08-25',
-    daysCount: 10,
-    notes: 'Vacaciones de verano planificadas con el equipo.',
-    status: 'PENDIENTE',
-    createdAt: '2026-08-10',
-  },
-  {
-    id: 'req-2',
-    userId: 'user-carlos',
-    userName: 'Carlos Ruiz',
-    userAvatar: 'https://images.unsplash.com/photo-1560250097-0b93528c311a?auto=format&fit=crop&w=150&q=80',
-    department: 'Desarrollo',
-    leaveType: 'Baja Médica',
-    startDate: '2026-09-02',
-    endDate: '2026-09-05',
-    daysCount: 4,
-    notes: 'Reposo prescrito por facultativo médico.',
-    status: 'PENDIENTE',
-    createdAt: '2026-08-12',
-  },
-  {
-    id: 'req-3',
-    userId: 'cesar-emp-01',
-    userName: 'César Hernández Moreno',
-    department: 'Desarrollo',
-    leaveType: 'Vacaciones',
-    startDate: '2026-08-12',
-    endDate: '2026-08-16',
-    daysCount: 5,
-    status: 'APROBADO',
-    createdAt: '2026-07-28',
-  },
-  {
-    id: 'req-4',
-    userId: 'cesar-emp-01',
-    userName: 'César Hernández Moreno',
-    department: 'Desarrollo',
-    leaveType: 'Días Personales',
-    startDate: '2026-10-25',
-    endDate: '2026-10-25',
-    daysCount: 1,
-    status: 'PENDIENTE',
-    createdAt: '2026-08-01',
-  },
-];
-
-const INITIAL_INCIDENTS: Incident[] = [
-  {
-    id: 'inc-1',
-    userId: 'user-maria',
-    userName: 'María Rodríguez',
-    userAvatar: 'https://images.unsplash.com/photo-1580489944761-15a19d654956?auto=format&fit=crop&w=150&q=80',
-    department: 'Ventas',
-    targetDate: '23 Oct 2023',
-    errorOriginal: 'Falta fichaje de salida',
-    proposedCorrection: '18:00 (Salida manual)',
-    correctedClockOut: '18:00',
-    reason: 'Se me olvidó fichar al salir de la oficina por atender una llamada urgente de un cliente.',
-    status: 'PENDIENTE',
-    createdAt: 'Hace 2h',
-  },
-  {
-    id: 'inc-2',
-    userId: 'user-javier',
-    userName: 'Javier López',
-    department: 'Soporte Técnico',
-    targetDate: '22 Oct 2023',
-    errorOriginal: 'Hora incorrecta (Entrada: 09:30)',
-    proposedCorrection: '09:00 (Entrada ajustada)',
-    correctedClockIn: '09:00',
-    reason: 'La app se quedó colgada al intentar fichar cuando llegué a las 9, tuve que reiniciar el móvil.',
-    status: 'PENDIENTE',
-    createdAt: 'Ayer',
-  },
-  {
-    id: 'inc-3',
-    userId: 'user-ana',
-    userName: 'Ana García',
-    department: 'Marketing',
-    targetDate: '20 Oct 2023',
-    errorOriginal: 'Geolocalización Inválida',
-    proposedCorrection: 'Validar Ubicación (Teletrabajo - Casa)',
-    reason: 'Estaba trabajando desde casa y el GPS del ordenador daba error de precisión.',
-    status: 'PENDIENTE',
-    createdAt: 'Hace 3 días',
-  },
-  {
-    id: 'inc-4',
-    userId: 'cesar-emp-01',
-    userName: 'César Hernández Moreno',
-    department: 'Desarrollo',
-    targetDate: '12 Nov 2023',
-    errorOriginal: 'Olvido de Fichaje Salida',
-    proposedCorrection: '18:00',
-    reason: 'Salí a las 18:00 pero olvidé registrar en la app.',
-    status: 'PENDIENTE',
-    createdAt: '12 Nov 2023',
-  },
-  {
-    id: 'inc-5',
-    userId: 'cesar-emp-01',
-    userName: 'César Hernández Moreno',
-    department: 'Desarrollo',
-    targetDate: '05 Nov 2023',
-    errorOriginal: 'Error de Ubicación GPS',
-    proposedCorrection: 'Oficina Central',
-    reason: 'La app me situó a 2km de la oficina al entrar.',
-    status: 'APROBADO',
-    createdAt: '05 Nov 2023',
-  },
-  {
-    id: 'inc-6',
-    userId: 'cesar-emp-01',
-    userName: 'César Hernández Moreno',
-    department: 'Desarrollo',
-    targetDate: '28 Oct 2023',
-    errorOriginal: 'Fichaje Duplicado',
-    proposedCorrection: 'Eliminar duplicado',
-    reason: 'Entrada registrada dos veces por error de red.',
-    status: 'RECHAZADO',
-    createdAt: '28 Oct 2023',
-  },
-];
-
-const INITIAL_AUDIT: AuditLog[] = [
-  {
-    id: 'audit-1',
-    actionType: 'EDICIÓN',
-    performedBy: 'Admin Principal',
-    performedByRole: 'Superusuario',
-    affectedUserId: '4092',
-    affectedUserName: 'Carlos Mendoza',
-    previousValue: 'Previo: 09:15',
-    newValue: 'Nuevo: 09:00',
-    justification: 'Empleado olvidó fichar al llegar; verificó hora de entrada con sistema de seguridad del edificio.',
-    timestamp: '24 Oct 2023, 14:32',
-    securityHash: '8f434346648f6b96df89dda901c5176b10a6d839ab8237ce81fa8b57b98d24b',
-  },
-  {
-    id: 'audit-2',
-    actionType: 'ELIMINACIÓN',
-    performedBy: 'Supervisor RRHH',
-    performedByRole: 'Manager',
-    affectedUserId: '88392',
-    affectedUserName: 'Fichaje Duplicado (#88392)',
-    previousValue: 'Registro de Salida: 18:02 (22/10) - ELIMINADO',
-    justification: 'Fichaje accidental duplicado por fallo de conexión en la terminal móvil del usuario.',
-    timestamp: '23 Oct 2023, 11:05',
-    securityHash: 'e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855',
-  },
-  {
-    id: 'audit-3',
-    actionType: 'ENTRADA MANUAL',
-    performedBy: 'Admin Principal',
-    performedByRole: 'Superusuario',
-    affectedUserId: '3921',
-    affectedUserName: 'Lucía Gómez (ID: 3921)',
-    newValue: 'NUEVO REGISTRO: Entrada a las 08:00',
-    justification: 'Terminal de fichaje físico fuera de servicio temporalmente por corte eléctrico.',
-    timestamp: '20 Oct 2023, 08:15',
-    securityHash: 'd2d2240b9550b07a78377c0fdb2df8e980efb321a36485890e9e160538a7b9c',
-  },
-];
+const INITIAL_NOTIFICATIONS: AppNotification[] = [];
+const INITIAL_ENTRIES: TimeEntry[] = [];
+const INITIAL_REQUESTS: TimeOffRequest[] = [];
+const INITIAL_INCIDENTS: Incident[] = [];
+const INITIAL_AUDIT: AuditLog[] = [];
 
 const AppContext = createContext<AppContextType | undefined>(undefined);
 
@@ -730,13 +379,88 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     shift2.status === 'pending' &&
     !isClockedIn;
 
-  // Lists
-  const [timeEntries, setTimeEntries] = useState<TimeEntry[]>(INITIAL_ENTRIES);
-  const [monthlyRecord, setMonthlyRecord] = useState<MonthlyRecord>(INITIAL_MONTHLY);
-  const [timeOffRequests, setTimeOffRequests] = useState<TimeOffRequest[]>(INITIAL_REQUESTS);
-  const [incidents, setIncidents] = useState<Incident[]>(INITIAL_INCIDENTS);
-  const [auditLogs, setAuditLogs] = useState<AuditLog[]>(INITIAL_AUDIT);
-  const [alarms, setAlarms] = useState<AlarmItem[]>(INITIAL_ALARMS);
+  // Anti-mock legacy filters
+  const isMockEntryId = (id?: string) => !id || id.startsWith('entry-');
+  const isMockRequestId = (id?: string) => !id || id.startsWith('req-');
+  const isMockIncidentId = (id?: string) => !id || id.startsWith('inc-');
+  const isMockAuditId = (id?: string) => !id || id.startsWith('audit-1') || id.startsWith('audit-2') || id.startsWith('audit-3');
+  const isMockNotifId = (id?: string) => !id || id.startsWith('notif-1') || id.startsWith('notif-2') || id.startsWith('notif-3') || id.startsWith('notif-4');
+
+  // Lists - persistent and clean
+  const [timeEntries, setTimeEntries] = useState<TimeEntry[]>(() => {
+    try {
+      const saved = localStorage.getItem('fichaplus_time_entries');
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed)) {
+          return parsed.filter((e) => !isMockEntryId(e.id));
+        }
+      }
+    } catch {}
+    return [];
+  });
+
+  const [monthlyRecord, setMonthlyRecord] = useState<MonthlyRecord>(() => {
+    try {
+      const saved = localStorage.getItem('fichaplus_monthly');
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (parsed && parsed.id !== 'aug-2026' && parsed.ordinaryHours !== 160) {
+          return parsed;
+        }
+      }
+    } catch {}
+    return getCleanMonthlyRecord(profile);
+  });
+
+  const [timeOffRequests, setTimeOffRequests] = useState<TimeOffRequest[]>(() => {
+    try {
+      const saved = localStorage.getItem('fichaplus_requests');
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed)) {
+          return parsed.filter((r) => !isMockRequestId(r.id));
+        }
+      }
+    } catch {}
+    return [];
+  });
+
+  const [incidents, setIncidents] = useState<Incident[]>(() => {
+    try {
+      const saved = localStorage.getItem('fichaplus_incidents');
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed)) {
+          return parsed.filter((i) => !isMockIncidentId(i.id));
+        }
+      }
+    } catch {}
+    return [];
+  });
+
+  const [auditLogs, setAuditLogs] = useState<AuditLog[]>(() => {
+    try {
+      const saved = localStorage.getItem('fichaplus_audit');
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed)) {
+          return parsed.filter((a) => !isMockAuditId(a.id));
+        }
+      }
+    } catch {}
+    return [];
+  });
+
+  const [alarms, setAlarms] = useState<AlarmItem[]>(() => {
+    try {
+      const saved = localStorage.getItem('fichaplus_alarms');
+      return saved ? JSON.parse(saved) : INITIAL_ALARMS;
+    } catch {
+      return INITIAL_ALARMS;
+    }
+  });
+
   const [companySettings, setCompanySettings] = useState<CompanySettings>(() => {
     try {
       const saved = localStorage.getItem('fichaplus_company_settings');
@@ -745,7 +469,20 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       return INITIAL_COMPANY;
     }
   });
-  const [notifications, setNotifications] = useState<AppNotification[]>(INITIAL_NOTIFICATIONS);
+
+  const [notifications, setNotifications] = useState<AppNotification[]>(() => {
+    try {
+      const saved = localStorage.getItem('fichaplus_notifications');
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed)) {
+          return parsed.filter((n) => !isMockNotifId(n.id));
+        }
+      }
+    } catch {}
+    return [];
+  });
+
   const [accessRequests, setAccessRequests] = useState<AccessRequest[]>(() => {
     try {
       const saved = localStorage.getItem('fichaplus_access_requests');
@@ -754,6 +491,69 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       return [];
     }
   });
+
+  // Keep state synced into localStorage immediately
+  useEffect(() => {
+    try {
+      localStorage.setItem('fichaplus_time_entries', JSON.stringify(timeEntries));
+    } catch {}
+  }, [timeEntries]);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem('fichaplus_monthly', JSON.stringify(monthlyRecord));
+    } catch {}
+  }, [monthlyRecord]);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem('fichaplus_requests', JSON.stringify(timeOffRequests));
+    } catch {}
+  }, [timeOffRequests]);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem('fichaplus_incidents', JSON.stringify(incidents));
+    } catch {}
+  }, [incidents]);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem('fichaplus_audit', JSON.stringify(auditLogs));
+    } catch {}
+  }, [auditLogs]);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem('fichaplus_notifications', JSON.stringify(notifications));
+    } catch {}
+  }, [notifications]);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem('fichaplus_alarms', JSON.stringify(alarms));
+    } catch {}
+  }, [alarms]);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem('fichaplus_access_requests', JSON.stringify(accessRequests));
+    } catch {}
+  }, [accessRequests]);
+
+  // One-time self-healing check on mount to cleanse legacy demo data if reset was previously triggered or mock IDs exist
+  useEffect(() => {
+    try {
+      const isReset = localStorage.getItem('fichaplus_is_reset') === 'true';
+      if (isReset) {
+        setTimeEntries((prev) => prev.filter((e) => !isMockEntryId(e.id)));
+        setTimeOffRequests((prev) => prev.filter((r) => !isMockRequestId(r.id)));
+        setIncidents((prev) => prev.filter((i) => !isMockIncidentId(i.id)));
+        setAuditLogs((prev) => prev.filter((a) => !isMockAuditId(a.id)));
+        setNotifications((prev) => prev.filter((n) => !isMockNotifId(n.id)));
+      }
+    } catch {}
+  }, []);
 
   // PWA Install & Device Permissions State
   const [isAppInstalled, setIsAppInstalled] = useState<boolean>(() => {
@@ -900,7 +700,17 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }
   };
 
-  // Firebase Firestore Listeners
+  const safeFirestoreRead = async <T,>(op: Promise<T>, timeoutMs: number = 800): Promise<T | null> => {
+    try {
+      const timeout = new Promise<null>((resolve) => setTimeout(() => resolve(null), timeoutMs));
+      return await Promise.race([op, timeout]);
+    } catch (err) {
+      console.warn('Firestore read skipped or timed out:', err);
+      return null;
+    }
+  };
+
+  // Firebase Firestore Listeners with anti-mock filtering
   useEffect(() => {
     try {
       const qEntries = query(collection(db, 'time_entries'), orderBy('date', 'desc'), limit(30));
@@ -908,7 +718,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         qEntries,
         (snap) => {
           if (!snap.empty) {
-            const list = snap.docs.map((d) => ({ id: d.id, ...d.data() } as TimeEntry));
+            const list = snap.docs
+              .map((d) => ({ id: d.id, ...d.data() } as TimeEntry))
+              .filter((e) => !isMockEntryId(e.id));
             setTimeEntries(list);
           }
         },
@@ -939,7 +751,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         collection(db, 'time_off_requests'),
         (snap) => {
           if (!snap.empty) {
-            const list = snap.docs.map((d) => ({ id: d.id, ...d.data() } as TimeOffRequest));
+            const list = snap.docs
+              .map((d) => ({ id: d.id, ...d.data() } as TimeOffRequest))
+              .filter((r) => !isMockRequestId(r.id));
             setTimeOffRequests(list);
           }
         },
@@ -950,7 +764,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         collection(db, 'incidents'),
         (snap) => {
           if (!snap.empty) {
-            const list = snap.docs.map((d) => ({ id: d.id, ...d.data() } as Incident));
+            const list = snap.docs
+              .map((d) => ({ id: d.id, ...d.data() } as Incident))
+              .filter((i) => !isMockIncidentId(i.id));
             setIncidents(list);
           }
         },
@@ -961,7 +777,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         collection(db, 'audit_logs'),
         (snap) => {
           if (!snap.empty) {
-            const list = snap.docs.map((d) => ({ id: d.id, ...d.data() } as AuditLog));
+            const list = snap.docs
+              .map((d) => ({ id: d.id, ...d.data() } as AuditLog))
+              .filter((a) => !isMockAuditId(a.id));
             setAuditLogs(list);
           }
         },
@@ -1772,10 +1590,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         {
           id: 'emp-001',
           employeeNumber: 'EMP-001',
-          fullName: options?.adminName?.trim() || profile.name || 'Administrador Principal',
+          fullName: options?.adminName?.trim() || profile.name || 'César Hernández Moreno',
           dni: options?.adminDni?.trim() || profile.dni || '12345678X',
-          email: options?.adminEmail?.trim() || profile.email || 'admin@empresa.com',
-          phone: profile.phone || '',
+          email: options?.adminEmail?.trim() || profile.email || 'cesar626313978@gmail.com',
+          phone: profile.phone || '+34 626 313 978',
           department: 'Dirección & RRHH',
           jobTitle: 'Responsable de Empresa',
           contractType: 'Indefinido',
@@ -1785,8 +1603,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
             options?.adminName || profile.name || 'Admin'
           )}`,
           hasRotatingShifts: false,
-          shiftWeekA: 'Mañana',
-          shiftWeekB: 'Mañana',
+          shiftWeekA: 'Continua (08:00 - 16:00)',
+          shiftWeekB: 'Continua (08:00 - 16:00)',
           joinedDate: nowIso.slice(0, 10),
           pinCode: '1234',
         },
@@ -1795,21 +1613,38 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     setEmployees(cleanEmployees);
     localStorage.setItem('fichaplus_employees', JSON.stringify(cleanEmployees));
 
+    // Mark all previous non-admin employee IDs as explicitly deleted
+    try {
+      const knownEmps = employees.map((e) => e.id).filter((id) => id !== 'emp-001' && id !== 'cesar-emp-01');
+      const dummyIds = ['emp-002', 'emp-003', 'emp-004', 'user-laura', 'user-carlos', 'user-maria', 'user-javier', 'user-ana', '4092', '88392', '3921'];
+      const allToPurge = Array.from(new Set([...knownEmps, ...dummyIds]));
+      localStorage.setItem('fichaplus_deleted_ids', JSON.stringify(allToPurge));
+      localStorage.setItem('fichaplus_is_reset', 'true');
+      localStorage.setItem('fichaplus_reset_time', nowIso);
+    } catch {}
+
     // 3. Clear time entries, requests, incidents, and punch clock
     setTimeEntries([]);
+    localStorage.setItem('fichaplus_time_entries', JSON.stringify([]));
+
     setTimeOffRequests([]);
+    localStorage.setItem('fichaplus_requests', JSON.stringify([]));
+
     setIncidents([]);
+    localStorage.setItem('fichaplus_incidents', JSON.stringify([]));
+
     setIsClockedIn(false);
     setIsPaused(false);
     setClockInTime(null);
     setElapsedSeconds(0);
+    localStorage.removeItem('fichaplus_punch_state');
 
     // 4. Reset Monthly Record
     const cleanMonthly: MonthlyRecord = {
       id: `monthly-${Date.now()}`,
-      userId: cleanEmployees[0]?.id || 'admin',
-      userName: cleanEmployees[0]?.fullName || 'Admin',
-      userDni: cleanEmployees[0]?.dni || '',
+      userId: cleanEmployees[0]?.id || 'emp-001',
+      userName: cleanEmployees[0]?.fullName || profile.name || 'César Hernández Moreno',
+      userDni: cleanEmployees[0]?.dni || profile.dni || '12345678X',
       month: new Date().toLocaleString('es-ES', { month: 'long', year: 'numeric' }),
       yearMonth: nowIso.slice(0, 7),
       ordinaryHours: 0,
@@ -1818,13 +1653,14 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       isSigned: false,
     };
     setMonthlyRecord(cleanMonthly);
+    localStorage.setItem('fichaplus_monthly', JSON.stringify(cleanMonthly));
 
     // 5. Initial Audit Log
     const hash = await generateSHA256(`PURGE_COMPANY_RESET_${nowIso}_${profile.name}`);
     const resetLog: AuditLog = {
       id: `audit-reset-${Date.now()}`,
       actionType: 'ELIMINACIÓN',
-      performedBy: profile.name,
+      performedBy: profile.name || 'Administrador Principal',
       performedByRole: 'Superadministrador',
       affectedUserId: 'ALL',
       affectedUserName: 'Toda la Empresa',
@@ -1835,23 +1671,59 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       securityHash: hash,
     };
     setAuditLogs([resetLog]);
+    localStorage.setItem('fichaplus_audit', JSON.stringify([resetLog]));
 
     // 6. Reset Notifications
-    setNotifications([
-      {
-        id: `notif-reset-${Date.now()}`,
-        title: 'Sistema Restablecido con Éxito',
-        message: 'Todos los datos de prueba han sido eliminados. Puedes dar de alta a tus empleados reales y personalizar los datos fiscales.',
-        type: 'info',
-        timestamp: 'Ahora',
-        read: false,
-      },
-    ]);
+    const resetNotif: AppNotification = {
+      id: `notif-reset-${Date.now()}`,
+      title: 'Sistema Restablecido con Éxito',
+      message: 'Todos los datos de prueba han sido eliminados. Puedes dar de alta a tus empleados reales y personalizar los datos fiscales.',
+      type: 'info',
+      timestamp: 'Ahora',
+      read: false,
+    };
+    setNotifications([resetNotif]);
+    localStorage.setItem('fichaplus_notifications', JSON.stringify([resetNotif]));
 
-    // Clear local storage entries
-    localStorage.removeItem('fichaplus_time_entries');
-    localStorage.removeItem('fichaplus_requests');
-    localStorage.removeItem('fichaplus_incidents');
+    // 7. Clear access requests
+    setAccessRequests([]);
+    localStorage.setItem('fichaplus_access_requests', JSON.stringify([]));
+
+    // 8. Best-effort Firestore purge for clean sync
+    try {
+      const snapEntries = await safeFirestoreRead(getDocs(collection(db, 'time_entries')), 1000);
+      if (snapEntries && !snapEntries.empty) {
+        snapEntries.docs.forEach((d) => safeFirestoreWrite(deleteDoc(doc(db, 'time_entries', d.id)), 300));
+      }
+    } catch {}
+    try {
+      const snapReqs = await safeFirestoreRead(getDocs(collection(db, 'time_off_requests')), 1000);
+      if (snapReqs && !snapReqs.empty) {
+        snapReqs.docs.forEach((d) => safeFirestoreWrite(deleteDoc(doc(db, 'time_off_requests', d.id)), 300));
+      }
+    } catch {}
+    try {
+      const snapIncidents = await safeFirestoreRead(getDocs(collection(db, 'incidents')), 1000);
+      if (snapIncidents && !snapIncidents.empty) {
+        snapIncidents.docs.forEach((d) => safeFirestoreWrite(deleteDoc(doc(db, 'incidents', d.id)), 300));
+      }
+    } catch {}
+    try {
+      const snapEmps = await safeFirestoreRead(getDocs(collection(db, 'employees')), 1000);
+      if (snapEmps && !snapEmps.empty) {
+        snapEmps.docs.forEach((d) => {
+          if (d.id !== 'emp-001' && d.id !== 'cesar-emp-01') {
+            safeFirestoreWrite(deleteDoc(doc(db, 'employees', d.id)), 300);
+          }
+        });
+      }
+    } catch {}
+    try {
+      if (cleanEmployees[0]) {
+        safeFirestoreWrite(setDoc(doc(db, 'employees', 'emp-001'), cleanEmployees[0]), 500);
+      }
+      safeFirestoreWrite(setDoc(doc(db, 'audit_logs', resetLog.id), resetLog), 500);
+    } catch {}
   };
 
   return (
