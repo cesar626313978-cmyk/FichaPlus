@@ -29,6 +29,7 @@ export const DashboardView: React.FC = () => {
     resetTodayShifts,
     setActiveTab,
     employees,
+    timeEntries,
     timeOffRequests,
     incidents,
     monthlyRecord,
@@ -57,6 +58,19 @@ export const DashboardView: React.FC = () => {
 
   // Confirmation Modal State (Antierror safety)
   const [confirmModalAction, setConfirmModalAction] = useState<ClockActionType | null>(null);
+
+  // Compute if the employee actually has registered entries or hours to sign in the monthly report
+  const userEntriesForSign = (timeEntries || []).filter(
+    (t) =>
+      t.userId === profile.id ||
+      t.userName === profile.name ||
+      (currentEmployee && t.userId === currentEmployee.id) ||
+      (employees.length <= 1 && (!t.userId || t.userId === 'emp-001'))
+  );
+  const computedUserHours = userEntriesForSign.reduce((sum, e) => sum + (e.totalHoursWorked || 0), 0);
+  const hasHoursToSign = computedUserHours > 0 || (monthlyRecord?.ordinaryHours || 0) > 0 || userEntriesForSign.length > 0;
+  // ONLY show the banner if the record is unsigned AND there is actual work registered to sign
+  const hasPendingMonthlySign = !monthlyRecord?.isSigned && hasHoursToSign;
   const [showConfirmModal, setShowConfirmModal] = useState(false);
 
   const formatTimer = (totalSec: number) => {
@@ -677,17 +691,17 @@ export const DashboardView: React.FC = () => {
           {/* Main Clean Terminal Punch Clock - Primary for Mobile */}
           {renderTerminalClock()}
 
-          {/* Pending Legal Tasks Reminder Banner (Compact below punch clock) */}
-          {!monthlyRecord.isSigned && (
-            <section className="bg-gradient-to-r from-amber-500 via-amber-400 to-amber-500 text-slate-900 rounded-3xl p-5 shadow-sm flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
+          {/* Pending Legal Tasks Reminder Banner - ONLY shown when there is actually work to sign */}
+          {hasPendingMonthlySign && (
+            <section className="bg-gradient-to-r from-amber-500 via-amber-400 to-amber-500 text-slate-900 rounded-3xl p-5 shadow-sm flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 animate-in fade-in duration-300">
               <div className="flex items-center gap-2.5">
                 <span className="material-symbols-outlined text-xl shrink-0">draw</span>
                 <div>
                   <h3 className="font-bold text-sm tracking-tight">
-                    Firma mensual pendiente
+                    Firma mensual pendiente ({monthlyRecord.month})
                   </h3>
                   <p className="text-xs text-slate-900/80">
-                    Recuerda firmar tu hoja de registro mensual obligatoria de jornada.
+                    Recuerda firmar tu hoja de registro mensual obligatoria de jornada ({computedUserHours.toFixed(1)}h computadas).
                   </p>
                 </div>
               </div>

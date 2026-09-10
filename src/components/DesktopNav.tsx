@@ -12,15 +12,31 @@ interface NavItem {
 }
 
 export const DesktopNav: React.FC = () => {
-  const { activeTab, setActiveTab } = useApp();
+  const { activeTab, setActiveTab, timeEntries, monthlyRecord, employees } = useApp();
   const { profile, switchRole, signOut } = useAuth();
   const isAdmin = profile.role === 'admin' || profile.role === 'manager';
+
+  const userEntriesForSign = (timeEntries || []).filter(
+    (t) =>
+      t.userId === profile.id ||
+      t.userName === profile.name ||
+      (employees.length <= 1 && (!t.userId || t.userId === 'emp-001'))
+  );
+  const computedUserHours = userEntriesForSign.reduce((sum, e) => sum + (e.totalHoursWorked || 0), 0);
+  const hasHoursToSign = computedUserHours > 0 || (monthlyRecord?.ordinaryHours || 0) > 0 || userEntriesForSign.length > 0;
+  const hasPendingMonthlySign = !monthlyRecord?.isSigned && hasHoursToSign;
+
+  const hasAdminPendingSignatures = employees.some(
+    (emp) =>
+      !monthlyRecord?.isSigned &&
+      ((timeEntries || []).some((t) => t.userId === emp.id && (t.totalHoursWorked || 0) > 0) || (monthlyRecord?.ordinaryHours || 0) > 0)
+  );
 
   const employeeNavItems: NavItem[] = [
     { id: 'dashboard', label: 'Mi Terminal de Fichaje', icon: 'timer' },
     { id: 'history', label: 'Mi Historial de Fichajes', icon: 'calendar_month' },
     { id: 'requests', label: 'Mis Vacaciones y Permisos', icon: 'flight_takeoff' },
-    { id: 'monthly_sign', label: 'Mi Firma Mensual (Art. 34.9)', icon: 'draw', highlight: true },
+    { id: 'monthly_sign', label: 'Mi Firma Mensual (Art. 34.9)', icon: 'draw', highlight: hasPendingMonthlySign },
     { id: 'incidents', label: 'Subsanar Mis Incidencias', icon: 'report_problem' },
     { id: 'alarms', label: 'Mis Alarmas y Avisos', icon: 'alarm' },
     { id: 'profile', label: 'Mi Perfil Laboral', icon: 'badge' },
@@ -31,7 +47,7 @@ export const DesktopNav: React.FC = () => {
     { id: 'employees', label: 'Gestión de Plantilla', icon: 'group', highlight: true, badge: 'RRHH' },
     { id: 'history', label: 'Registro de Jornadas (Todos)', icon: 'calendar_month' },
     { id: 'requests', label: 'Gestión de Permisos', icon: 'rule' },
-    { id: 'monthly_sign', label: 'Firmas de la Plantilla', icon: 'draw', highlight: true },
+    { id: 'monthly_sign', label: 'Firmas de la Plantilla', icon: 'draw', highlight: hasAdminPendingSignatures },
     { id: 'incidents', label: 'Validar Incidencias', icon: 'fact_check' },
     { id: 'itss', label: 'Portal Inspección ITSS', icon: 'gavel', highlight: true, badge: 'LEGAL' },
     { id: 'audit', label: 'Auditoría Legal SHA-256', icon: 'verified_user' },

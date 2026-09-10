@@ -25,6 +25,7 @@ export const MonthlySignatureView: React.FC = () => {
 
   const computedTotalHours = userEntries.reduce((sum, e) => sum + (e.totalHoursWorked || 0), 0);
   const displayTotalHours = computedTotalHours > 0 ? computedTotalHours : (monthlyRecord.ordinaryHours || 0);
+  const hasHoursToSign = computedTotalHours > 0 || (monthlyRecord.ordinaryHours || 0) > 0 || userEntries.length > 0;
 
   const ordHours = Math.floor(displayTotalHours);
   const ordMins = Math.round((displayTotalHours - ordHours) * 60);
@@ -98,11 +99,19 @@ export const MonthlySignatureView: React.FC = () => {
                 ? 'bg-purple-100 text-purple-800'
                 : monthlyRecord.isSigned
                 ? 'bg-emerald-100 text-emerald-800'
+                : !hasHoursToSign
+                ? 'bg-slate-100 text-slate-600'
                 : 'bg-amber-100 text-amber-800'
             }`}
           >
             <span className="w-1.5 h-1.5 rounded-full bg-current"></span>
-            {isAdmin ? 'Módulo Legal de RRHH' : monthlyRecord.isSigned ? 'Registro Firmado y Válido' : 'Pendiente de Firma Legal'}
+            {isAdmin
+              ? 'Módulo Legal de RRHH'
+              : monthlyRecord.isSigned
+              ? 'Registro Firmado y Válido'
+              : !hasHoursToSign
+              ? 'Sin Fichajes Pendientes de Firma'
+              : 'Pendiente de Firma Legal'}
           </span>
           <h1 className="font-black text-3xl md:text-4xl text-slate-900 tracking-tight">
             {isAdmin ? 'Firmas Mensuales de la Plantilla' : `${monthlyRecord.month}`}
@@ -418,38 +427,64 @@ export const MonthlySignatureView: React.FC = () => {
 
           {/* Signature Box */}
           <div className="bg-white rounded-3xl shadow-sm border border-slate-100 p-6 sm:p-8">
-            <div className="flex items-start gap-3.5 mb-6 bg-indigo-50/50 p-4 rounded-2xl border border-indigo-100">
-              <input
-                id="legal-check"
-                type="checkbox"
-                checked={legalAccepted}
-                onChange={(e) => setLegalAccepted(e.target.checked)}
-                className="w-5 h-5 rounded-md text-indigo-600 border-slate-300 focus:ring-indigo-500 cursor-pointer shrink-0 mt-0.5"
-              />
-              <label htmlFor="legal-check" className="text-xs sm:text-sm font-medium text-slate-700 cursor-pointer leading-relaxed">
-                Declaro que la información contenida en este registro horario mensual es veraz, exacta y refleja fielmente las horas ordinarias y extraordinarias trabajadas durante el periodo indicado, conforme al <strong>Art. 34.9 del Estatuto de los Trabajadores</strong>.
-              </label>
-            </div>
+            {!hasHoursToSign && !monthlyRecord.isSigned ? (
+              <div className="bg-slate-50 border border-slate-200 p-4 sm:p-5 rounded-2xl flex items-start gap-3.5 mb-6">
+                <span className="material-symbols-outlined text-slate-400 text-2xl shrink-0">info</span>
+                <div>
+                  <h4 className="font-bold text-sm text-slate-800">No hay jornadas registradas para firmar</h4>
+                  <p className="text-xs text-slate-500 mt-1 leading-relaxed">
+                    No tienes fichajes computados en el mes de <strong>{monthlyRecord.month}</strong>. El aviso de firma mensual y la posibilidad de firmar se activarán de forma automática cuando fiches y existan registros pendientes de tu conformidad legal.
+                  </p>
+                </div>
+              </div>
+            ) : (
+              <div className="flex items-start gap-3.5 mb-6 bg-indigo-50/50 p-4 rounded-2xl border border-indigo-100">
+                <input
+                  id="legal-check"
+                  type="checkbox"
+                  checked={legalAccepted}
+                  disabled={monthlyRecord.isSigned}
+                  onChange={(e) => setLegalAccepted(e.target.checked)}
+                  className="w-5 h-5 rounded-md text-indigo-600 border-slate-300 focus:ring-indigo-500 cursor-pointer shrink-0 mt-0.5"
+                />
+                <label htmlFor="legal-check" className="text-xs sm:text-sm font-medium text-slate-700 cursor-pointer leading-relaxed">
+                  Declaro que la información contenida en este registro horario mensual es veraz, exacta y refleja fielmente las horas ordinarias y extraordinarias trabajadas durante el periodo indicado, conforme al <strong>Art. 34.9 del Estatuto de los Trabajadores</strong>.
+                </label>
+              </div>
+            )}
 
             <div className="flex flex-col sm:flex-row gap-3 justify-between items-center">
               <button
                 onClick={handleSign}
-                disabled={!legalAccepted || isSigning}
+                disabled={!legalAccepted || isSigning || !hasHoursToSign || monthlyRecord.isSigned}
                 className={`w-full sm:w-auto px-8 py-3.5 rounded-2xl font-bold text-sm shadow-md transition-all flex items-center justify-center gap-2 cursor-pointer ${
-                  legalAccepted && !isSigning
+                  hasHoursToSign && !monthlyRecord.isSigned && legalAccepted && !isSigning
                     ? 'bg-indigo-600 hover:bg-indigo-700 text-white shadow-indigo-200 hover:shadow-lg'
                     : 'bg-slate-100 text-slate-400 cursor-not-allowed'
                 }`}
               >
                 <span className="material-symbols-outlined text-lg">
-                  {isSigning ? 'sync' : 'draw'}
+                  {monthlyRecord.isSigned ? 'verified' : isSigning ? 'sync' : 'draw'}
                 </span>
-                <span>{isSigning ? 'Generando Firma SHA-256...' : 'Firmar Registro Mensual'}</span>
+                <span>
+                  {monthlyRecord.isSigned
+                    ? 'Registro Ya Firmado'
+                    : !hasHoursToSign
+                    ? 'Sin Registros para Firmar'
+                    : isSigning
+                    ? 'Generando Firma SHA-256...'
+                    : 'Firmar Registro Mensual'}
+                </span>
               </button>
 
               <button
                 onClick={handleDownloadPdf}
-                className="w-full sm:w-auto bg-slate-50 hover:bg-slate-100 text-slate-700 border border-slate-200 px-6 py-3.5 rounded-2xl font-bold text-sm transition-all flex items-center justify-center gap-2 cursor-pointer"
+                disabled={!hasHoursToSign && !monthlyRecord.isSigned}
+                className={`w-full sm:w-auto border px-6 py-3.5 rounded-2xl font-bold text-sm transition-all flex items-center justify-center gap-2 cursor-pointer ${
+                  hasHoursToSign || monthlyRecord.isSigned
+                    ? 'bg-slate-50 hover:bg-slate-100 text-slate-700 border-slate-200'
+                    : 'bg-slate-50 text-slate-300 border-slate-100 cursor-not-allowed'
+                }`}
               >
                 <span className="material-symbols-outlined text-lg text-rose-500">picture_as_pdf</span>
                 <span>Descargar Modelo Oficial PDF</span>
