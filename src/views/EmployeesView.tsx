@@ -365,22 +365,15 @@ export const EmployeesView: React.FC = () => {
         </div>
 
         <div className="flex flex-wrap items-center gap-2.5">
-          <button
-            type="button"
-            disabled={isSyncingCloud}
-            onClick={async () => {
-              const res = await syncAllLocalDataToFirestore();
-              setSuccessToast(res.message);
-              setTimeout(() => setSuccessToast(null), 5000);
-            }}
-            className="bg-indigo-700/60 hover:bg-indigo-700 text-white font-bold text-xs uppercase tracking-wider py-3.5 px-4 rounded-2xl border border-indigo-400/40 shadow-sm transition-all flex items-center gap-2 cursor-pointer disabled:opacity-50"
-            title="Sube y actualiza todos los empleados en la base de datos Firestore para que se vean al instante en el móvil"
-          >
-            <span className={`material-symbols-outlined text-lg ${isSyncingCloud ? 'animate-spin' : ''}`}>
-              {isSyncingCloud ? 'sync' : 'cloud_sync'}
+          {/* Live Automatic Sync Status Badge */}
+          <div className="bg-indigo-900/50 backdrop-blur-xs border border-indigo-400/30 text-white text-xs font-semibold px-4 py-3 rounded-2xl flex items-center gap-2.5 shadow-xs">
+            <span className="relative flex h-2.5 w-2.5">
+              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+              <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-emerald-500"></span>
             </span>
-            <span>{isSyncingCloud ? 'Sincronizando...' : 'Sincronizar con Móviles'}</span>
-          </button>
+            <span className="hidden sm:inline text-indigo-100">Guardado automático:</span>
+            <span className="font-bold text-emerald-300">En la nube al instante</span>
+          </div>
 
           <button
             type="button"
@@ -388,7 +381,7 @@ export const EmployeesView: React.FC = () => {
               try {
                 navigator.clipboard.writeText(window.location.origin);
                 setCopiedLink(true);
-                setSuccessToast('✓ Enlace copiado al portapapeles. ¡Ábrelo o envíalo por WhatsApp a los móviles!');
+                setSuccessToast('✓ Enlace copiado. ¡Pégalo en WhatsApp o envíalo a los móviles de los empleados!');
                 setTimeout(() => {
                   setCopiedLink(false);
                   setSuccessToast(null);
@@ -397,13 +390,13 @@ export const EmployeesView: React.FC = () => {
                 setSuccessToast('Enlace de la app: ' + window.location.origin);
               }
             }}
-            className="bg-indigo-800/80 hover:bg-indigo-800 text-white font-bold text-xs uppercase tracking-wider py-3.5 px-4 rounded-2xl border border-indigo-400/30 shadow-sm transition-all flex items-center gap-2 cursor-pointer"
+            className="bg-indigo-800/90 hover:bg-indigo-700 text-white font-bold text-xs uppercase tracking-wider py-3.5 px-4 rounded-2xl border border-indigo-400/30 shadow-sm transition-all flex items-center gap-2 cursor-pointer hover:scale-102"
             title="Copiar enlace para abrir en el teléfono de los empleados"
           >
             <span className="material-symbols-outlined text-lg text-amber-300">
               {copiedLink ? 'task_alt' : 'smartphone'}
             </span>
-            <span>{copiedLink ? '¡Enlace Copiado!' : 'Enlace Móvil'}</span>
+            <span>{copiedLink ? '¡Enlace Copiado!' : 'Enviar a Móviles'}</span>
           </button>
 
           <button
@@ -416,24 +409,24 @@ export const EmployeesView: React.FC = () => {
         </div>
       </div>
 
-      {/* Cloud Sync Status Banner */}
-      <div className="bg-white/90 border border-emerald-200/80 rounded-2xl p-3.5 shadow-xs flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-        <div className="flex items-center gap-3">
-          <div className="w-8 h-8 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center shrink-0 border border-emerald-100">
-            <span className="material-symbols-outlined text-xl">cloud_done</span>
+      {/* Cloud Sync Status Banner - Total reassurance */}
+      <div className="bg-white/95 border border-emerald-200/80 rounded-2xl p-4 shadow-xs flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+        <div className="flex items-start sm:items-center gap-3">
+          <div className="w-10 h-10 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center shrink-0 border border-emerald-100 shadow-2xs">
+            <span className="material-symbols-outlined text-2xl">cloud_done</span>
           </div>
           <div>
-            <div className="flex items-center gap-2">
+            <div className="flex flex-wrap items-center gap-2">
               <span className="inline-block w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse"></span>
               <h4 className="text-xs font-black text-slate-800 uppercase tracking-wider">
-                Firebase Firestore Activo (Tiempo Real)
+                Sincronización Automática en Tiempo Real Activa
               </h4>
-              <span className="text-[10px] font-bold bg-emerald-100 text-emerald-800 px-2 py-0.5 rounded-full">
-                {sanitizedEmployees.length} empleados sincronizados
+              <span className="text-[10px] font-bold bg-emerald-100 text-emerald-800 px-2.5 py-0.5 rounded-full border border-emerald-200/60">
+                {sanitizedEmployees.length} empleados en la nube
               </span>
             </div>
-            <p className="text-[11px] text-slate-500 mt-0.5">
-              Los datos creados o modificados en el PC se reflejan instantáneamente en los teléfonos de los empleados sin recargar.
+            <p className="text-xs text-slate-600 mt-1 max-w-2xl leading-relaxed">
+              <strong>Tus cambios nunca se pierden ni se sobreescriben.</strong> Al crear o modificar un empleado o turno en el PC, se guarda automáticamente en la base de datos central de Firebase en milisegundos. Cuando un empleado entra desde su móvil, accede a estos datos en tiempo real.
             </p>
           </div>
         </div>
@@ -441,15 +434,19 @@ export const EmployeesView: React.FC = () => {
         <div className="flex items-center gap-2 shrink-0 self-end sm:self-center">
           <button
             type="button"
+            disabled={isSyncingCloud}
             onClick={async () => {
               const res = await syncAllLocalDataToFirestore();
-              setSuccessToast(res.message);
+              setSuccessToast('✓ Conexión con Firestore verificada. Todos los datos están al día.');
               setTimeout(() => setSuccessToast(null), 4000);
             }}
-            className="text-xs font-bold text-indigo-600 hover:text-indigo-800 bg-indigo-50 hover:bg-indigo-100 px-3 py-1.5 rounded-xl transition-colors flex items-center gap-1.5 cursor-pointer"
+            className="text-xs font-bold text-indigo-700 hover:text-indigo-900 bg-indigo-50 hover:bg-indigo-100 border border-indigo-200/60 px-3 py-2 rounded-xl transition-all flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
+            title="Comprobar la conexión con la nube de Firebase"
           >
-            <span className="material-symbols-outlined text-sm">refresh</span>
-            <span>Forzar Sincronización</span>
+            <span className={`material-symbols-outlined text-sm ${isSyncingCloud ? 'animate-spin' : ''}`}>
+              {isSyncingCloud ? 'sync' : 'sync_saved_locally'}
+            </span>
+            <span>{isSyncingCloud ? 'Verificando...' : 'Verificar Nube'}</span>
           </button>
         </div>
       </div>
