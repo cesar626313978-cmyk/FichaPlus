@@ -13,6 +13,7 @@ import {
   doesEmployeeWorkSaturday,
   getSaturdayScheduleBadge,
 } from '../utils/shiftUtils';
+import { getNextEmployeeNumber } from '../utils/employeeUtils';
 
 export const EmployeesView: React.FC = () => {
   const {
@@ -66,7 +67,7 @@ export const EmployeesView: React.FC = () => {
     setEditingEmployeeId(null);
     setFullName('');
     setDni(String(Math.floor(10000000 + Math.random() * 90000000)) + 'X');
-    setEmployeeNumber(`EMP-00${employees.length + 1}`);
+    setEmployeeNumber(getNextEmployeeNumber(employees));
     setEmail('');
     setPhone('');
     setWeeklyHours(40);
@@ -121,21 +122,76 @@ export const EmployeesView: React.FC = () => {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!fullName || !email) return;
+    if (isSaving) return;
+    if (!fullName.trim() || !email.trim()) return;
+
+    const trimmedDni = dni.trim();
+    const trimmedEmail = email.trim().toLowerCase();
+    const cleanFullName = fullName.trim();
+
+    // 1. Validation: Prevent duplicate DNI/NIE
+    if (trimmedDni) {
+      const isDniTaken = employees.some(
+        (emp) =>
+          emp.id !== editingEmployeeId &&
+          emp.dni &&
+          emp.dni.trim().toUpperCase() === trimmedDni.toUpperCase()
+      );
+      if (isDniTaken) {
+        setSuccessToast(`⚠️ Ya existe un empleado con el DNI/NIE "${trimmedDni}".`);
+        return;
+      }
+    }
+
+    // 2. Validation: Prevent duplicate email
+    const isEmailTaken = employees.some(
+      (emp) =>
+        emp.id !== editingEmployeeId &&
+        emp.email &&
+        emp.email.trim().toLowerCase() === trimmedEmail
+    );
+    if (isEmailTaken) {
+      setSuccessToast(`⚠️ Ya existe un empleado con el correo "${trimmedEmail}".`);
+      return;
+    }
+
+    // 3. Validation: Prevent duplicate name on new employee registration
+    if (!editingEmployeeId) {
+      const isNameTaken = employees.some(
+        (emp) =>
+          emp.fullName.trim().toLowerCase() === cleanFullName.toLowerCase()
+      );
+      if (isNameTaken) {
+        setSuccessToast(`⚠️ Ya existe un empleado con el nombre "${cleanFullName}". Si desea modificarlo, use el botón Editar.`);
+        return;
+      }
+    }
 
     setIsSaving(true);
     try {
-      const finalDni = dni.trim() || `${Math.floor(10000000 + Math.random() * 90000000)}X`;
-      const finalNumber = employeeNumber.trim() || `EMP-00${employees.length + 1}`;
+      const finalDni = trimmedDni || `${Math.floor(10000000 + Math.random() * 90000000)}X`;
+      
+      // Ensure unique employee number
+      let finalNumber = employeeNumber.trim();
+      const isNumberTaken = employees.some(
+        (emp) =>
+          emp.id !== editingEmployeeId &&
+          emp.employeeNumber &&
+          emp.employeeNumber.trim().toUpperCase() === finalNumber.toUpperCase()
+      );
+      if (!finalNumber || isNumberTaken) {
+        finalNumber = getNextEmployeeNumber(employees);
+      }
+
       const doesWorkSat = saturdayPlan !== 'NO';
 
       if (editingEmployeeId) {
         await updateEmployee(editingEmployeeId, {
-          fullName,
+          fullName: cleanFullName,
           dni: finalDni,
           employeeNumber: finalNumber,
-          email,
-          phone,
+          email: trimmedEmail,
+          phone: phone.trim(),
           weeklyHours: Number(weeklyHours) || 40,
           department,
           jobTitle,
@@ -152,21 +208,21 @@ export const EmployeesView: React.FC = () => {
           saturdayShiftWeekB,
           pinCode,
         });
-        setSuccessToast(`✓ ¡Empleado "${fullName}" actualizado con éxito!`);
+        setSuccessToast(`✓ ¡Empleado "${cleanFullName}" actualizado con éxito!`);
       } else {
         const newEmp: Omit<EmployeeRecord, 'id'> = {
-          fullName,
+          fullName: cleanFullName,
           dni: finalDni,
           employeeNumber: finalNumber,
-          email,
-          phone,
+          email: trimmedEmail,
+          phone: phone.trim(),
           weeklyHours: Number(weeklyHours) || 40,
           department,
           jobTitle,
           contractType,
           role,
           status: 'ACTIVO',
-          avatarUrl: `https://api.dicebear.com/7.x/avataaars/svg?seed=${encodeURIComponent(fullName)}`,
+          avatarUrl: `https://api.dicebear.com/7.x/avataaars/svg?seed=${encodeURIComponent(cleanFullName)}`,
           hasRotatingShifts,
           rotationStartDate,
           shiftWeekA,
@@ -179,14 +235,10 @@ export const EmployeesView: React.FC = () => {
           joinedDate: new Date().toISOString().slice(0, 10),
           pinCode,
         };
-        await addEmployee(newEmp);
-        setSuccessToast(`✓ ¡"${fullName}" añadido y guardado con éxito!`);
+        const createdRecord = await addEmployee(newEmp);
+        setSuccessToast(`✓ ¡"${cleanFullName}" añadido y guardado con éxito!`);
 
         // Automatically open invite modal for the new employee
-        const createdRecord: EmployeeRecord = {
-          ...newEmp,
-          id: 'emp-' + Date.now(),
-        };
         setInviteModalEmployee(createdRecord);
       }
 

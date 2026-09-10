@@ -4,6 +4,7 @@ import {
   onSnapshot,
   addDoc,
   updateDoc,
+  setDoc,
   doc,
   deleteDoc,
   query,
@@ -36,6 +37,12 @@ import {
   playDeviceChime,
 } from '../utils/devicePermissions';
 import { getEmployeeShiftInfo, EmployeeShiftInfo } from '../utils/shiftUtils';
+import {
+  getNextEmployeeNumber,
+  reconcileAndDeduplicateEmployees,
+  mergeEmployees,
+  normalizeName,
+} from '../utils/employeeUtils';
 
 interface AppContextType {
   // Navigation
@@ -89,7 +96,7 @@ interface AppContextType {
   setShowDeviceModal: (show: boolean) => void;
   
   // Actions
-  addEmployee: (emp: Omit<EmployeeRecord, 'id'>) => Promise<void>;
+  addEmployee: (emp: Omit<EmployeeRecord, 'id'>) => Promise<EmployeeRecord>;
   updateEmployee: (id: string, emp: Partial<EmployeeRecord>) => Promise<void>;
   deleteEmployee: (id: string) => Promise<void>;
 
@@ -618,13 +625,21 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       if (saved) {
         const parsed = JSON.parse(saved);
         if (Array.isArray(parsed) && parsed.length > 0) {
-          return parsed;
+          const reconciled = reconcileAndDeduplicateEmployees(parsed, INITIAL_EMPLOYEES, profile);
+          try {
+            localStorage.setItem('fichaplus_employees', JSON.stringify(reconciled));
+          } catch {}
+          return reconciled;
         }
       }
     } catch (e) {
       console.warn('Could not load employees from localStorage:', e);
     }
-    return INITIAL_EMPLOYEES;
+    const initialReconciled = reconcileAndDeduplicateEmployees([], INITIAL_EMPLOYEES, profile);
+    try {
+      localStorage.setItem('fichaplus_employees', JSON.stringify(initialReconciled));
+    } catch {}
+    return initialReconciled;
   });
 
   // Find logged-in user employee record
@@ -878,11 +893,17 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         collection(db, 'employees'),
         (snap) => {
           if (!snap.empty) {
-            const list = snap.docs.map((d) => ({ id: d.id, ...d.data() } as EmployeeRecord));
-            setEmployees(list);
-            try {
-              localStorage.setItem('fichaplus_employees', JSON.stringify(list));
-            } catch {}
+            const firestoreList = snap.docs.map((d) => {
+              const data = d.data() as EmployeeRecord;
+              return { ...data, id: data.id || d.id };
+            });
+            setEmployees((prev) => {
+              const merged = mergeEmployees(prev, firestoreList);
+              try {
+                localStorage.setItem('fichaplus_employees', JSON.stringify(merged));
+              } catch {}
+              return merged;
+            });
           }
         },
         (err) => console.warn('Firestore employees listener warning:', err?.message)
@@ -933,15 +954,33 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }
   }, []);
 
-  const addEmployee = async (empData: Omit<EmployeeRecord, 'id'>) => {
+  const addEmployee = async (empData: Omit<EmployeeRecord, 'id'>): Promise<EmployeeRecord> => {
+    const newId = `emp-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
+
+    // Ensure unique sequential employee number
+    let finalEmpNumber = empData.employeeNumber?.trim();
+    if (!finalEmpNumber) {
+      finalEmpNumber = getNextEmployeeNumber(employees);
+    }
+
     const newEmp: EmployeeRecord = {
       ...empData,
-      id: `emp-${Date.now()}`,
+      id: newId,
+      employeeNumber: finalEmpNumber,
     };
-    
-    // Immediately persist in memory and local storage
+
+    // Immediately persist in memory and local storage, ensuring no duplicate cards
     setEmployees((prev) => {
-      const updated = [newEmp, ...prev];
+      const normName = normalizeName(newEmp.fullName);
+      const normEmail = (newEmp.email || '').trim().toLowerCase();
+      // Filter out any duplicate of this person
+      const filtered = prev.filter((e) => {
+        if (e.id === newEmp.id) return false;
+        if (normName && normalizeName(e.fullName) === normName && normName.length > 3) return false;
+        if (normEmail && e.email && e.email.trim().toLowerCase() === normEmail) return false;
+        return true;
+      });
+      const updated = [newEmp, ...filtered];
       try {
         localStorage.setItem('fichaplus_employees', JSON.stringify(updated));
       } catch (err) {
@@ -966,14 +1005,16 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     };
     setAuditLogs((prev) => [log, ...prev]);
 
-    // Safe non-blocking sync with cloud
+    // Use setDoc so Firestore document ID is ALWAYS newEmp.id
     await safeFirestoreWrite(
       Promise.all([
-        addDoc(collection(db, 'employees'), newEmp),
+        setDoc(doc(db, 'employees', newEmp.id), newEmp),
         addDoc(collection(db, 'audit_logs'), log),
       ]),
       800
     );
+
+    return newEmp;
   };
 
   const updateEmployee = async (id: string, empUpdates: Partial<EmployeeRecord>) => {
@@ -989,8 +1030,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     });
 
     // Safe non-blocking sync with cloud with timeout guard
+    // Use setDoc with merge: true so it creates or updates the doc seamlessly
     await safeFirestoreWrite(
-      updateDoc(doc(db, 'employees', id), empUpdates),
+      setDoc(doc(db, 'employees', id), empUpdates, { merge: true }),
       800
     );
   };
@@ -1001,6 +1043,13 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       const updated = prev.filter((e) => e.id !== id);
       try {
         localStorage.setItem('fichaplus_employees', JSON.stringify(updated));
+        // Also save deleted ID so recovery doesn't resurrect intentionally deleted employee
+        const savedDeleted = localStorage.getItem('fichaplus_deleted_ids');
+        const deletedArr: string[] = savedDeleted ? JSON.parse(savedDeleted) : [];
+        if (!deletedArr.includes(id)) {
+          deletedArr.push(id);
+          localStorage.setItem('fichaplus_deleted_ids', JSON.stringify(deletedArr));
+        }
       } catch (err) {
         console.warn('Error saving to localStorage:', err);
       }
