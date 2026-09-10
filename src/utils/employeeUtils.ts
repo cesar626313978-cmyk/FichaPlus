@@ -1,11 +1,36 @@
 import { EmployeeRecord } from '../types';
 
+export const MASTER_ADMIN_RECORD: EmployeeRecord = {
+  id: 'emp-001',
+  employeeNumber: 'EMP-001',
+  fullName: 'César Hernández Moreno',
+  dni: '12345678X',
+  email: 'cesar626313978@gmail.com',
+  phone: '+34 626 313 978',
+  department: 'Dirección & RRHH',
+  jobTitle: 'Director General / Administrador',
+  contractType: 'Indefinido',
+  weeklyHours: 40,
+  role: 'admin',
+  status: 'ACTIVO',
+  avatarUrl: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=250&q=80',
+  hasRotatingShifts: true,
+  rotationStartDate: '2026-08-01',
+  shiftWeekA: 'Continua (08:00 - 16:00)',
+  shiftWeekB: 'Partida (09:00 - 14:00 / 16:00 - 19:00)',
+  worksSaturday: true,
+  saturdayPlan: 'ALTERNO_A',
+  saturdayShift: 'Continua (09:00 - 14:00)',
+  joinedDate: '2022-03-15',
+  pinCode: '1234',
+};
+
 /**
  * Calculates the next sequential employee number, e.g. EMP-001, EMP-002...
  * Scans all existing records to find the highest number and increments by 1.
  */
 export const getNextEmployeeNumber = (employees: EmployeeRecord[]): string => {
-  let max = 0;
+  let max = 1; // EMP-001 is reserved for Admin
   for (const emp of employees) {
     if (!emp?.employeeNumber) continue;
     const match = emp.employeeNumber.match(/\d+/);
@@ -28,23 +53,109 @@ export const normalizeName = (name: string): string => {
     .toLowerCase()
     .normalize('NFD')
     .replace(/[\u0300-\u036f]/g, '')
+    .replace(/[^a-z0-9\s]/g, '')
     .replace(/\s+/g, ' ')
     .trim();
 };
 
 /**
+ * Normalizes phone numbers to compare national digits (last 9 digits)
+ */
+export const getCleanPhoneDigits = (phone?: string): string => {
+  if (!phone) return '';
+  const digits = phone.replace(/\D/g, '');
+  if (digits.length >= 9) {
+    return digits.slice(-9);
+  }
+  return digits;
+};
+
+/**
+ * Checks whether an employee record represents the Master Administrator (César)
+ */
+export const isMasterAdmin = (emp?: Partial<EmployeeRecord> | null): boolean => {
+  if (!emp) return false;
+  const email = (emp.email || '').toLowerCase().trim();
+  if (email === 'cesar626313978@gmail.com') return true;
+  const normName = normalizeName(emp.fullName || '');
+  if (normName === 'cesar hernandez moreno' || normName === 'cesar hernandez') return true;
+  return false;
+};
+
+/**
+ * Checks if two employee records represent the exact same human being
+ */
+export const areSamePerson = (
+  a: Partial<EmployeeRecord>,
+  b: Partial<EmployeeRecord>
+): boolean => {
+  if (!a || !b) return false;
+  if (a.id && b.id && a.id === b.id) return true;
+
+  // Name check (normalized)
+  const nameA = normalizeName(a.fullName || '');
+  const nameB = normalizeName(b.fullName || '');
+  if (nameA && nameB && nameA === nameB && nameA.length > 3) {
+    return true;
+  }
+
+  // Email check
+  const emailA = (a.email || '').toLowerCase().trim();
+  const emailB = (b.email || '').toLowerCase().trim();
+  if (emailA && emailB && emailA === emailB) {
+    return true;
+  }
+
+  // DNI check (ignoring generic placeholder)
+  const dniA = (a.dni || '').toUpperCase().trim();
+  const dniB = (b.dni || '').toUpperCase().trim();
+  if (
+    dniA &&
+    dniB &&
+    dniA === dniB &&
+    dniA !== '00000000A' &&
+    dniA !== '12345678X'
+  ) {
+    return true;
+  }
+
+  // Phone check (last 9 digits)
+  const phoneA = getCleanPhoneDigits(a.phone);
+  const phoneB = getCleanPhoneDigits(b.phone);
+  if (phoneA && phoneB && phoneA.length === 9 && phoneA === phoneB) {
+    return true;
+  }
+
+  return false;
+};
+
+/**
  * Cleans, deduplicates and reconciles the employee directory.
- * - Merges duplicate records of the same person (e.g. same name or same email/DNI).
- * - Restores the Admin user (EMP-001) if missing.
- * - Restores base company staff if they were accidentally erased by snapshot overwrites.
- * - Guarantees sequential, unique employee numbers (no duplicate EMP-002).
+ * - Merges duplicate records of the same person (e.g. same name or same email/DNI/phone).
+ * - Guarantees the Master Admin user (César Hernández Moreno, EMP-001) is ALWAYS present.
+ * - Guarantees sequential, unique employee numbers (EMP-001, EMP-002, EMP-003, no duplicates).
  */
 export const reconcileAndDeduplicateEmployees = (
   storedList: EmployeeRecord[],
-  initialEmployees: EmployeeRecord[],
+  initialEmployees?: EmployeeRecord[],
   adminProfile?: { name?: string; email?: string; dni?: string; phone?: string }
 ): EmployeeRecord[] => {
-  // Read list of explicitly deleted employee IDs so we don't resurrect them
+  // Clear any accidental deletion of admin from deleted IDs
+  try {
+    const savedDeleted = localStorage.getItem('fichaplus_deleted_ids');
+    if (savedDeleted) {
+      let deletedIds: string[] = JSON.parse(savedDeleted);
+      if (Array.isArray(deletedIds)) {
+        const cleaned = deletedIds.filter(
+          (id) => id !== 'emp-001' && id !== 'cesar-emp-01'
+        );
+        if (cleaned.length !== deletedIds.length) {
+          localStorage.setItem('fichaplus_deleted_ids', JSON.stringify(cleaned));
+        }
+      }
+    }
+  } catch {}
+
   let deletedIds: string[] = [];
   try {
     const savedDeleted = localStorage.getItem('fichaplus_deleted_ids');
@@ -53,93 +164,86 @@ export const reconcileAndDeduplicateEmployees = (
     }
   } catch {}
 
-  const isExplicitlyDeleted = (id: string) => deletedIds.includes(id);
+  const isExplicitlyDeleted = (id: string) =>
+    id !== 'emp-001' && id !== 'cesar-emp-01' && deletedIds.includes(id);
 
-  // 1. Map to collect unique employees
-  // We identify duplicates if they have the exact same normalized name or same email or same DNI
   const seenPersons: EmployeeRecord[] = [];
+  let foundAdminRecord: EmployeeRecord | null = null;
 
-  const addOrMergePerson = (emp: EmployeeRecord) => {
-    if (!emp || !emp.fullName || isExplicitlyDeleted(emp.id)) return;
+  const addOrMergePerson = (incoming: EmployeeRecord) => {
+    if (!incoming || !incoming.fullName) return;
+    if (isExplicitlyDeleted(incoming.id)) return;
 
-    const normName = normalizeName(emp.fullName);
-    const normEmail = (emp.email || '').trim().toLowerCase();
-    const normDni = (emp.dni || '').trim().toUpperCase();
+    // Check if incoming is the master admin César
+    if (isMasterAdmin(incoming)) {
+      if (!foundAdminRecord) {
+        foundAdminRecord = {
+          ...MASTER_ADMIN_RECORD,
+          ...incoming,
+          id: 'emp-001',
+          employeeNumber: 'EMP-001',
+          role: 'admin',
+          status: 'ACTIVO',
+        };
+      } else {
+        foundAdminRecord = {
+          ...foundAdminRecord,
+          ...incoming,
+          id: 'emp-001',
+          employeeNumber: 'EMP-001',
+          role: 'admin',
+        };
+      }
+      return;
+    }
 
-    // Check if this person is already in seenPersons
-    const existingIndex = seenPersons.findIndex((p) => {
-      const matchName = normalizeName(p.fullName) === normName && normName.length > 3;
-      const matchEmail = normEmail && p.email && p.email.trim().toLowerCase() === normEmail;
-      const matchDni = normDni && p.dni && p.dni.trim().toUpperCase() === normDni;
-      return matchName || matchEmail || matchDni;
-    });
+    // If an employee was mistakenly saved with id 'emp-001' but is NOT César, give them their own id
+    let empToProcess = { ...incoming };
+    if (empToProcess.id === 'emp-001') {
+      empToProcess.id = `emp-staff-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
+    }
+
+    // Search for existing person in seenPersons
+    const existingIndex = seenPersons.findIndex((p) => areSamePerson(p, empToProcess));
 
     if (existingIndex >= 0) {
-      // Merge: prefer the newer or more complete record
+      // Merge: prefer real DNI, prefer better phone, prefer valid email
       const existing = seenPersons[existingIndex];
+      const bestDni =
+        empToProcess.dni && empToProcess.dni.length >= 8 && !empToProcess.dni.includes('00000000')
+          ? empToProcess.dni
+          : existing.dni || empToProcess.dni;
+      const bestEmail =
+        empToProcess.email && empToProcess.email.includes('@')
+          ? empToProcess.email
+          : existing.email || empToProcess.email;
+      const bestPhone =
+        empToProcess.phone && empToProcess.phone.length >= 9
+          ? empToProcess.phone
+          : existing.phone || empToProcess.phone;
+
       seenPersons[existingIndex] = {
         ...existing,
-        ...emp,
-        // Keep valid email (prefer .es or longer, or newer)
-        email: emp.email || existing.email,
-        phone: emp.phone || existing.phone,
-        dni: emp.dni || existing.dni,
-        worksSaturday: emp.worksSaturday ?? existing.worksSaturday,
-        saturdayPlan: emp.saturdayPlan || existing.saturdayPlan,
-        saturdayShift: emp.saturdayShift || existing.saturdayShift,
-        id: existing.id || emp.id,
+        ...empToProcess,
+        dni: bestDni,
+        email: bestEmail,
+        phone: bestPhone,
+        id: existing.id || empToProcess.id,
+        // Keep active status if either was active
+        status: existing.status === 'ACTIVO' || empToProcess.status === 'ACTIVO' ? 'ACTIVO' : empToProcess.status,
       };
     } else {
-      seenPersons.push({ ...emp });
+      seenPersons.push({ ...empToProcess });
     }
   };
 
-  // Add all currently stored employees
+  // Add all stored employees
   if (Array.isArray(storedList)) {
     storedList.forEach(addOrMergePerson);
   }
 
-  // 2. Ensure Admin is present (César Hernández Moreno or current admin profile)
-  const adminName = adminProfile?.name || 'César Hernández Moreno';
-  const adminEmail = (adminProfile?.email || 'cesar626313978@gmail.com').toLowerCase();
-  const adminDni = adminProfile?.dni || '12345678X';
-
-  const hasAdmin = seenPersons.some(
-    (p) =>
-      p.id === 'emp-001' ||
-      normalizeName(p.fullName) === normalizeName(adminName) ||
-      (p.email && p.email.toLowerCase() === adminEmail)
-  );
-
-  if (!hasAdmin) {
-    seenPersons.unshift({
-      id: 'emp-001',
-      employeeNumber: 'EMP-001',
-      fullName: adminName,
-      dni: adminDni,
-      email: adminEmail,
-      phone: adminProfile?.phone || '+34 626 313 978',
-      department: 'Desarrollo & Tecnología',
-      jobTitle: 'Administrador / Responsable RRHH',
-      contractType: 'Indefinido',
-      weeklyHours: 40,
-      status: 'ACTIVO',
-      avatarUrl:
-        'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=250&q=80',
-      hasRotatingShifts: true,
-      rotationStartDate: '2026-08-01',
-      shiftWeekA: 'Continua (08:00 - 16:00)',
-      shiftWeekB: 'Partida (09:00 - 14:00 / 16:00 - 19:00)',
-      worksSaturday: true,
-      saturdayPlan: 'ALTERNO_A',
-      saturdayShift: 'Continua (09:00 - 14:00)',
-      joinedDate: '2022-03-15',
-      pinCode: '1234',
-    });
-  }
-
-  // 3. If pre-existing employees were erased (e.g. only 1 or 2 left), restore the initial company staff
-  if (seenPersons.length < 3 && Array.isArray(initialEmployees)) {
+  // If the list is completely empty, initialize with initial company employees
+  if (seenPersons.length === 0 && Array.isArray(initialEmployees) && initialEmployees.length > 0) {
     for (const initEmp of initialEmployees) {
       if (!isExplicitlyDeleted(initEmp.id)) {
         addOrMergePerson(initEmp);
@@ -147,15 +251,36 @@ export const reconcileAndDeduplicateEmployees = (
     }
   }
 
-  // 4. Re-index employee numbers to guarantee strict uniqueness and no duplicates
-  // Keep EMP-001 for admin if present
-  const usedNumbers = new Set<string>();
-  let nextCounter = 1;
+  // Ensure Admin record is ALWAYS initialized
+  if (!foundAdminRecord) {
+    foundAdminRecord = {
+      ...MASTER_ADMIN_RECORD,
+      fullName: adminProfile?.name || MASTER_ADMIN_RECORD.fullName,
+      email: adminProfile?.email || MASTER_ADMIN_RECORD.email,
+      phone: adminProfile?.phone || MASTER_ADMIN_RECORD.phone,
+      dni: adminProfile?.dni || MASTER_ADMIN_RECORD.dni,
+    };
+  }
 
-  return seenPersons.map((emp) => {
+  // Admin is ALWAYS position 0
+  const combinedList: EmployeeRecord[] = [foundAdminRecord, ...seenPersons];
+
+  // Re-index employee numbers: EMP-001 for admin, strictly sequential unique numbers for others
+  const usedNumbers = new Set<string>(['EMP-001']);
+  let nextCounter = 2;
+
+  return combinedList.map((emp, idx) => {
+    if (idx === 0) {
+      return {
+        ...emp,
+        id: 'emp-001',
+        employeeNumber: 'EMP-001',
+        role: 'admin',
+      };
+    }
+
     let empNum = emp.employeeNumber?.trim();
-    if (!empNum || usedNumbers.has(empNum)) {
-      // Find next free number
+    if (!empNum || empNum === 'EMP-001' || usedNumbers.has(empNum)) {
       while (usedNumbers.has(`EMP-${String(nextCounter).padStart(3, '0')}`)) {
         nextCounter++;
       }
@@ -172,67 +297,13 @@ export const reconcileAndDeduplicateEmployees = (
 };
 
 /**
- * Merges Firestore snapshot list into local list without deleting local employees.
+ * Merges Firestore snapshot list into local list without creating duplicates.
  */
 export const mergeEmployees = (
   localList: EmployeeRecord[],
   firestoreList: EmployeeRecord[]
 ): EmployeeRecord[] => {
-  const map = new Map<string, EmployeeRecord>();
-
-  // Add local employees first
-  for (const emp of localList) {
-    if (emp?.id) {
-      map.set(emp.id, emp);
-    }
-  }
-
-  // Add / update with Firestore docs
-  for (const fEmp of firestoreList) {
-    if (!fEmp?.id) continue;
-    const existing = map.get(fEmp.id);
-    if (existing) {
-      map.set(fEmp.id, { ...existing, ...fEmp });
-    } else {
-      // Check if person exists by normalized name or email to prevent creating a second card
-      const normName = normalizeName(fEmp.fullName);
-      const normEmail = (fEmp.email || '').trim().toLowerCase();
-      let matchedKey: string | null = null;
-
-      for (const [key, val] of map.entries()) {
-        if (
-          (normName && normalizeName(val.fullName) === normName && normName.length > 3) ||
-          (normEmail && val.email && val.email.trim().toLowerCase() === normEmail)
-        ) {
-          matchedKey = key;
-          break;
-        }
-      }
-
-      if (matchedKey) {
-        // Merge into existing rather than duplicating
-        const prev = map.get(matchedKey)!;
-        map.set(matchedKey, { ...prev, ...fEmp, id: prev.id });
-      } else {
-        map.set(fEmp.id, fEmp);
-      }
-    }
-  }
-
-  const combined = Array.from(map.values());
-  // Ensure unique numbers
-  const usedNums = new Set<string>();
-  let counter = 1;
-  return combined.map((emp) => {
-    let num = emp.employeeNumber?.trim();
-    if (!num || usedNums.has(num)) {
-      while (usedNums.has(`EMP-${String(counter).padStart(3, '0')}`)) {
-        counter++;
-      }
-      num = `EMP-${String(counter).padStart(3, '0')}`;
-      counter++;
-    }
-    usedNums.add(num);
-    return { ...emp, employeeNumber: num };
-  });
+  const combined = [...(localList || []), ...(firestoreList || [])];
+  return reconcileAndDeduplicateEmployees(combined);
 };
+

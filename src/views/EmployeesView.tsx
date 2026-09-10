@@ -1,5 +1,6 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { useApp } from '../context/AppContext';
+import { useAuth } from '../context/AuthContext';
 import { EmployeeRecord, SaturdayPlanType } from '../types';
 import { EmployeeInviteModal } from '../components/EmployeeInviteModal';
 import { UserAvatar } from '../components/UserAvatar';
@@ -13,7 +14,13 @@ import {
   doesEmployeeWorkSaturday,
   getSaturdayScheduleBadge,
 } from '../utils/shiftUtils';
-import { getNextEmployeeNumber } from '../utils/employeeUtils';
+import {
+  getNextEmployeeNumber,
+  reconcileAndDeduplicateEmployees,
+  areSamePerson,
+  isMasterAdmin,
+  MASTER_ADMIN_RECORD,
+} from '../utils/employeeUtils';
 
 export const EmployeesView: React.FC = () => {
   const {
@@ -28,6 +35,12 @@ export const EmployeesView: React.FC = () => {
     approveAccessRequest,
     rejectAccessRequest,
   } = useApp();
+  const { profile } = useAuth();
+
+  // Deduplicated employee directory guaranteed to have Master Admin César as EMP-001
+  const sanitizedEmployees = useMemo(() => {
+    return reconcileAndDeduplicateEmployees(employees, undefined, profile);
+  }, [employees, profile]);
 
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [editingEmployeeId, setEditingEmployeeId] = useState<string | null>(null);
@@ -67,7 +80,7 @@ export const EmployeesView: React.FC = () => {
     setEditingEmployeeId(null);
     setFullName('');
     setDni(String(Math.floor(10000000 + Math.random() * 90000000)) + 'X');
-    setEmployeeNumber(getNextEmployeeNumber(employees));
+    setEmployeeNumber(getNextEmployeeNumber(sanitizedEmployees));
     setEmail('');
     setPhone('');
     setWeeklyHours(40);
@@ -129,40 +142,79 @@ export const EmployeesView: React.FC = () => {
     const trimmedEmail = email.trim().toLowerCase();
     const cleanFullName = fullName.trim();
 
-    // 1. Validation: Prevent duplicate DNI/NIE
-    if (trimmedDni) {
-      const isDniTaken = employees.some(
+    // 1. Check if person already exists (by name, email, DNI, or phone) when creating new
+    if (!editingEmployeeId) {
+      const existingPerson = sanitizedEmployees.find((emp) =>
+        areSamePerson(emp, {
+          fullName: cleanFullName,
+          email: trimmedEmail,
+          dni: trimmedDni,
+          phone: phone.trim(),
+        })
+      );
+
+      if (existingPerson) {
+        setIsSaving(true);
+        try {
+          const doesWorkSat = saturdayPlan !== 'NO';
+          await updateEmployee(existingPerson.id, {
+            fullName: cleanFullName,
+            dni: trimmedDni || existingPerson.dni,
+            email: trimmedEmail,
+            phone: phone.trim() || existingPerson.phone,
+            weeklyHours: Number(weeklyHours) || 40,
+            department,
+            jobTitle,
+            contractType,
+            role: existingPerson.role === 'admin' ? 'admin' : role,
+            hasRotatingShifts,
+            rotationStartDate,
+            shiftWeekA,
+            shiftWeekB,
+            worksSaturday: doesWorkSat,
+            saturdayPlan,
+            saturdayReferenceDate,
+            saturdayShift,
+            saturdayShiftWeekB,
+            pinCode,
+          });
+          setSuccessToast(`✓ ¡Ficha de "${cleanFullName}" actualizada correctamente (se fusionó para evitar duplicados)!`);
+          setIsFormOpen(false);
+          setTimeout(() => setSuccessToast(null), 3500);
+          return;
+        } catch (err) {
+          setSuccessToast(`⚠️ Error al actualizar ficha: ${err instanceof Error ? err.message : 'Error'}`);
+          return;
+        } finally {
+          setIsSaving(false);
+        }
+      }
+    }
+
+    // 2. Validation: Prevent duplicate DNI/NIE if editing another employee
+    if (trimmedDni && editingEmployeeId) {
+      const isDniTaken = sanitizedEmployees.some(
         (emp) =>
           emp.id !== editingEmployeeId &&
           emp.dni &&
           emp.dni.trim().toUpperCase() === trimmedDni.toUpperCase()
       );
       if (isDniTaken) {
-        setSuccessToast(`⚠️ Ya existe un empleado con el DNI/NIE "${trimmedDni}".`);
+        setSuccessToast(`⚠️ Ya existe otro empleado con el DNI/NIE "${trimmedDni}".`);
         return;
       }
     }
 
-    // 2. Validation: Prevent duplicate email
-    const isEmailTaken = employees.some(
-      (emp) =>
-        emp.id !== editingEmployeeId &&
-        emp.email &&
-        emp.email.trim().toLowerCase() === trimmedEmail
-    );
-    if (isEmailTaken) {
-      setSuccessToast(`⚠️ Ya existe un empleado con el correo "${trimmedEmail}".`);
-      return;
-    }
-
-    // 3. Validation: Prevent duplicate name on new employee registration
-    if (!editingEmployeeId) {
-      const isNameTaken = employees.some(
+    // 3. Validation: Prevent duplicate email if editing another employee
+    if (editingEmployeeId) {
+      const isEmailTaken = sanitizedEmployees.some(
         (emp) =>
-          emp.fullName.trim().toLowerCase() === cleanFullName.toLowerCase()
+          emp.id !== editingEmployeeId &&
+          emp.email &&
+          emp.email.trim().toLowerCase() === trimmedEmail
       );
-      if (isNameTaken) {
-        setSuccessToast(`⚠️ Ya existe un empleado con el nombre "${cleanFullName}". Si desea modificarlo, use el botón Editar.`);
+      if (isEmailTaken) {
+        setSuccessToast(`⚠️ Ya existe otro empleado con el correo "${trimmedEmail}".`);
         return;
       }
     }
@@ -173,14 +225,14 @@ export const EmployeesView: React.FC = () => {
       
       // Ensure unique employee number
       let finalNumber = employeeNumber.trim();
-      const isNumberTaken = employees.some(
+      const isNumberTaken = sanitizedEmployees.some(
         (emp) =>
           emp.id !== editingEmployeeId &&
           emp.employeeNumber &&
           emp.employeeNumber.trim().toUpperCase() === finalNumber.toUpperCase()
       );
-      if (!finalNumber || isNumberTaken) {
-        finalNumber = getNextEmployeeNumber(employees);
+      if (!finalNumber || isNumberTaken || finalNumber === 'EMP-001') {
+        finalNumber = getNextEmployeeNumber(sanitizedEmployees);
       }
 
       const doesWorkSat = saturdayPlan !== 'NO';
@@ -252,7 +304,7 @@ export const EmployeesView: React.FC = () => {
     }
   };
 
-  const filteredEmployees = employees.filter((emp) => {
+  const filteredEmployees = sanitizedEmployees.filter((emp) => {
     const matchesSearch =
       emp.fullName.toLowerCase().includes(searchTerm.toLowerCase()) ||
       emp.dni.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -279,15 +331,15 @@ export const EmployeesView: React.FC = () => {
     return matchesSearch && matchesStatus && matchesDept && matchesSat;
   });
 
-  const departments = Array.from(new Set(employees.map((e) => e.department).filter(Boolean)));
+  const departments = Array.from(new Set(sanitizedEmployees.map((e) => e.department).filter(Boolean)));
   const nextSat = getNextSaturday();
   const nextSatFormatted = nextSat.toLocaleDateString('es-ES', {
     weekday: 'short',
     day: 'numeric',
     month: 'short',
   });
-  const workingThisSatCount = employees.filter((e) => doesEmployeeWorkSaturday(e, nextSat)).length;
-  const restingThisSatCount = employees.length - workingThisSatCount;
+  const workingThisSatCount = sanitizedEmployees.filter((e) => doesEmployeeWorkSaturday(e, nextSat)).length;
+  const restingThisSatCount = sanitizedEmployees.length - workingThisSatCount;
 
   return (
     <div className="max-w-6xl mx-auto flex flex-col gap-6">
@@ -591,10 +643,10 @@ export const EmployeesView: React.FC = () => {
                     <span className="bg-slate-100 text-slate-700 font-mono font-bold text-[10px] px-2 py-0.5 rounded-md">
                       {emp.employeeNumber}
                     </span>
-                    {emp.role === 'admin' && (
+                    {(emp.role === 'admin' || isMasterAdmin(emp) || emp.id === 'emp-001') && (
                       <span className="bg-indigo-100 text-indigo-700 text-[10px] font-black uppercase px-2 py-0.5 rounded-full border border-indigo-200 flex items-center gap-0.5">
                         <span className="material-symbols-outlined text-xs">admin_panel_settings</span>
-                        Admin
+                        Administrador
                       </span>
                     )}
                   </div>
@@ -746,14 +798,14 @@ export const EmployeesView: React.FC = () => {
                 >
                   <span className="material-symbols-outlined text-base">sync</span>
                 </button>
-                {emp.id !== 'emp-001' && (
+                {!isMasterAdmin(emp) && emp.id !== 'emp-001' && emp.employeeNumber !== 'EMP-001' && (
                   <button
                     onClick={() => {
                       if (confirm(`¿Estás seguro de dar de baja a ${emp.fullName}?`)) {
                         deleteEmployee(emp.id);
                       }
                     }}
-                    className="text-slate-400 hover:text-rose-600 p-1.5 rounded-lg hover:bg-rose-50 text-xs font-semibold"
+                    className="text-slate-400 hover:text-rose-600 p-1.5 rounded-lg hover:bg-rose-50 text-xs font-semibold cursor-pointer"
                     title="Dar de baja empleado"
                   >
                     <span className="material-symbols-outlined text-base">delete</span>

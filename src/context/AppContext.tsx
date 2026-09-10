@@ -42,6 +42,9 @@ import {
   reconcileAndDeduplicateEmployees,
   mergeEmployees,
   normalizeName,
+  areSamePerson,
+  isMasterAdmin,
+  MASTER_ADMIN_RECORD,
 } from '../utils/employeeUtils';
 
 interface AppContextType {
@@ -653,6 +656,29 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     );
   }, [employees, profile]);
 
+  // Auto-heal, deduplicate, and guarantee Master Admin is ALWAYS restored
+  useEffect(() => {
+    const reconciled = reconcileAndDeduplicateEmployees(employees, INITIAL_EMPLOYEES, profile);
+    const isDifferent =
+      reconciled.length !== employees.length ||
+      reconciled.some(
+        (rec, i) =>
+          rec.id !== employees[i]?.id ||
+          rec.fullName !== employees[i]?.fullName ||
+          rec.employeeNumber !== employees[i]?.employeeNumber ||
+          rec.email !== employees[i]?.email
+      );
+
+    if (isDifferent) {
+      setEmployees(reconciled);
+      try {
+        localStorage.setItem('fichaplus_employees', JSON.stringify(reconciled));
+      } catch (err) {
+        console.warn('Error saving healed employees:', err);
+      }
+    }
+  }, [employees, profile]);
+
   // Derived shift information based on HR assignment & rotation rules
   const currentShiftInfo = useMemo(() => {
     return getEmployeeShiftInfo(currentEmployee, new Date());
@@ -955,105 +981,150 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   }, []);
 
   const addEmployee = async (empData: Omit<EmployeeRecord, 'id'>): Promise<EmployeeRecord> => {
+    // 1. Check if this person already exists in employees by name, email, DNI, or phone digits
+    const existingIndex = employees.findIndex((e) => areSamePerson(e, empData));
+
+    let recordToSave: EmployeeRecord;
+
+    if (existingIndex >= 0) {
+      // Person already exists: update and merge record to strictly prevent duplicate cards
+      const existing = employees[existingIndex];
+      recordToSave = {
+        ...existing,
+        ...empData,
+        id: existing.id,
+        employeeNumber: existing.employeeNumber || getNextEmployeeNumber(employees),
+      };
+
+      setEmployees((prev) => {
+        const updated = prev.map((e, idx) => (idx === existingIndex ? recordToSave : e));
+        const reconciled = reconcileAndDeduplicateEmployees(updated, undefined, profile);
+        try {
+          localStorage.setItem('fichaplus_employees', JSON.stringify(reconciled));
+        } catch {}
+        return reconciled;
+      });
+
+      await safeFirestoreWrite(
+        setDoc(doc(db, 'employees', recordToSave.id), recordToSave, { merge: true }),
+        800
+      );
+
+      return recordToSave;
+    }
+
+    // 2. Fresh new person
     const newId = `emp-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
 
-    // Ensure unique sequential employee number
+    // Ensure unique sequential employee number (never overwrite EMP-001)
     let finalEmpNumber = empData.employeeNumber?.trim();
-    if (!finalEmpNumber) {
+    if (!finalEmpNumber || finalEmpNumber === 'EMP-001') {
       finalEmpNumber = getNextEmployeeNumber(employees);
     }
 
-    const newEmp: EmployeeRecord = {
+    recordToSave = {
       ...empData,
       id: newId,
       employeeNumber: finalEmpNumber,
     };
 
-    // Immediately persist in memory and local storage, ensuring no duplicate cards
     setEmployees((prev) => {
-      const normName = normalizeName(newEmp.fullName);
-      const normEmail = (newEmp.email || '').trim().toLowerCase();
-      // Filter out any duplicate of this person
-      const filtered = prev.filter((e) => {
-        if (e.id === newEmp.id) return false;
-        if (normName && normalizeName(e.fullName) === normName && normName.length > 3) return false;
-        if (normEmail && e.email && e.email.trim().toLowerCase() === normEmail) return false;
-        return true;
-      });
-      const updated = [newEmp, ...filtered];
+      const updated = [...prev, recordToSave];
+      const reconciled = reconcileAndDeduplicateEmployees(updated, undefined, profile);
       try {
-        localStorage.setItem('fichaplus_employees', JSON.stringify(updated));
+        localStorage.setItem('fichaplus_employees', JSON.stringify(reconciled));
       } catch (err) {
         console.warn('Error saving to localStorage:', err);
       }
-      return updated;
+      return reconciled;
     });
 
     // Add audit log
-    const hash = await generateSHA256(`ADD_EMPLOYEE_${newEmp.employeeNumber}_${newEmp.fullName}_${Date.now()}`);
+    const hash = await generateSHA256(`ADD_EMPLOYEE_${recordToSave.employeeNumber}_${recordToSave.fullName}_${Date.now()}`);
     const log: AuditLog = {
       id: `audit-${Date.now()}`,
       actionType: 'ENTRADA MANUAL',
       performedBy: profile.name,
       performedByRole: profile.role === 'admin' ? 'Superusuario RRHH' : 'Manager',
-      affectedUserId: newEmp.id,
-      affectedUserName: newEmp.fullName,
-      newValue: `Alta de empleado ${newEmp.employeeNumber} (${newEmp.fullName}) - DNI: ${newEmp.dni}`,
+      affectedUserId: recordToSave.id,
+      affectedUserName: recordToSave.fullName,
+      newValue: `Alta de empleado ${recordToSave.employeeNumber} (${recordToSave.fullName}) - DNI: ${recordToSave.dni}`,
       justification: 'Alta en sistema de control horario y asignación de jornada.',
       timestamp: new Date().toLocaleString('es-ES'),
       securityHash: hash,
     };
     setAuditLogs((prev) => [log, ...prev]);
 
-    // Use setDoc so Firestore document ID is ALWAYS newEmp.id
+    // Use setDoc so Firestore document ID is ALWAYS recordToSave.id
     await safeFirestoreWrite(
       Promise.all([
-        setDoc(doc(db, 'employees', newEmp.id), newEmp),
+        setDoc(doc(db, 'employees', recordToSave.id), recordToSave),
         addDoc(collection(db, 'audit_logs'), log),
       ]),
       800
     );
 
-    return newEmp;
+    return recordToSave;
   };
 
   const updateEmployee = async (id: string, empUpdates: Partial<EmployeeRecord>) => {
+    // If updating master admin, protect admin privileges and EMP-001
+    let cleanUpdates = { ...empUpdates };
+    if (id === 'emp-001') {
+      cleanUpdates.role = 'admin';
+      cleanUpdates.employeeNumber = 'EMP-001';
+    }
+
     // Immediately persist in memory and local storage
     setEmployees((prev) => {
-      const updated = prev.map((e) => (e.id === id ? { ...e, ...empUpdates } : e));
+      const updated = prev.map((e) => (e.id === id ? { ...e, ...cleanUpdates } : e));
+      const reconciled = reconcileAndDeduplicateEmployees(updated, undefined, profile);
       try {
-        localStorage.setItem('fichaplus_employees', JSON.stringify(updated));
+        localStorage.setItem('fichaplus_employees', JSON.stringify(reconciled));
       } catch (err) {
         console.warn('Error saving to localStorage:', err);
       }
-      return updated;
+      return reconciled;
     });
 
     // Safe non-blocking sync with cloud with timeout guard
     // Use setDoc with merge: true so it creates or updates the doc seamlessly
     await safeFirestoreWrite(
-      setDoc(doc(db, 'employees', id), empUpdates, { merge: true }),
+      setDoc(doc(db, 'employees', id), cleanUpdates, { merge: true }),
       800
     );
   };
 
   const deleteEmployee = async (id: string) => {
+    // Strictly protect the Master Administrator from deletion
+    if (id === 'emp-001') {
+      console.warn('Cannot delete the Master Administrator (EMP-001)');
+      return;
+    }
     const target = employees.find((e) => e.id === id);
+    if (target && isMasterAdmin(target)) {
+      console.warn('Cannot delete the Master Administrator');
+      return;
+    }
+
     setEmployees((prev) => {
-      const updated = prev.filter((e) => e.id !== id);
+      const updated = prev.filter((e) => e.id !== id && !isMasterAdmin(e));
+      const reconciled = reconcileAndDeduplicateEmployees(updated, undefined, profile);
       try {
-        localStorage.setItem('fichaplus_employees', JSON.stringify(updated));
-        // Also save deleted ID so recovery doesn't resurrect intentionally deleted employee
-        const savedDeleted = localStorage.getItem('fichaplus_deleted_ids');
-        const deletedArr: string[] = savedDeleted ? JSON.parse(savedDeleted) : [];
-        if (!deletedArr.includes(id)) {
-          deletedArr.push(id);
-          localStorage.setItem('fichaplus_deleted_ids', JSON.stringify(deletedArr));
+        localStorage.setItem('fichaplus_employees', JSON.stringify(reconciled));
+        // Also save deleted ID (never delete admin)
+        if (id !== 'emp-001') {
+          const savedDeleted = localStorage.getItem('fichaplus_deleted_ids');
+          const deletedArr: string[] = savedDeleted ? JSON.parse(savedDeleted) : [];
+          if (!deletedArr.includes(id)) {
+            deletedArr.push(id);
+            localStorage.setItem('fichaplus_deleted_ids', JSON.stringify(deletedArr));
+          }
         }
       } catch (err) {
         console.warn('Error saving to localStorage:', err);
       }
-      return updated;
+      return reconciled;
     });
 
     if (target) {
@@ -1529,10 +1600,29 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     const req = accessRequests.find((r) => r.id === id);
     if (!req) return;
 
+    // Check if employee already exists with this email / DNI / name
+    const existingIndex = employees.findIndex((e) =>
+      areSamePerson(e, { fullName: req.fullName, email: req.email, dni: req.dni, phone: req.phone })
+    );
+
+    if (existingIndex !== -1) {
+      // Already an employee! Just approve request without duplicating employee record
+      const updatedReqs = accessRequests.map((r) =>
+        r.id === id ? ({ ...r, status: 'APROBADO' } as AccessRequest) : r
+      );
+      setAccessRequests(updatedReqs);
+      try {
+        localStorage.setItem('fichaplus_access_requests', JSON.stringify(updatedReqs));
+      } catch {}
+      return;
+    }
+
+    const nextNumber = getNextEmployeeNumber(employees);
+
     // Create active employee from request
     const newEmp: EmployeeRecord = {
       id: `emp-${Date.now()}`,
-      employeeNumber: `EMP-${String(employees.length + 1).padStart(3, '0')}`,
+      employeeNumber: nextNumber,
       fullName: req.fullName,
       dni: req.dni,
       email: req.email,
@@ -1552,18 +1642,22 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       invitationMethod: 'email',
     };
 
-    const updatedEmployees = [...employees, newEmp];
-    setEmployees(updatedEmployees);
-    localStorage.setItem('fichaplus_employees', JSON.stringify(updatedEmployees));
+    const reconciled = reconcileAndDeduplicateEmployees([...employees, newEmp], undefined, profile);
+    setEmployees(reconciled);
+    try {
+      localStorage.setItem('fichaplus_employees', JSON.stringify(reconciled));
+    } catch {}
 
     // Update access request status
     const updatedReqs = accessRequests.map((r) =>
       r.id === id ? ({ ...r, status: 'APROBADO' } as AccessRequest) : r
     );
     setAccessRequests(updatedReqs);
-    localStorage.setItem('fichaplus_access_requests', JSON.stringify(updatedReqs));
+    try {
+      localStorage.setItem('fichaplus_access_requests', JSON.stringify(updatedReqs));
+    } catch {}
 
-    await safeFirestoreWrite(addDoc(collection(db, 'employees'), newEmp), 800);
+    await safeFirestoreWrite(setDoc(doc(db, 'employees', newEmp.id), newEmp), 800);
   };
 
   const rejectAccessRequest = async (id: string) => {
