@@ -192,6 +192,9 @@ export const EmployeesView: React.FC = () => {
 
       setIsFormOpen(false);
       setTimeout(() => setSuccessToast(null), 3500);
+    } catch (err) {
+      console.error('Error saving employee:', err);
+      setSuccessToast(`⚠️ Error al guardar: ${err instanceof Error ? err.message : 'Verifique los datos'}`);
     } finally {
       setIsSaving(false);
     }

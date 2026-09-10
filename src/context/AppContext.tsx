@@ -612,7 +612,20 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const [activeTab, setActiveTab] = useState<any>('dashboard');
 
   // Lists
-  const [employees, setEmployees] = useState<EmployeeRecord[]>(INITIAL_EMPLOYEES);
+  const [employees, setEmployees] = useState<EmployeeRecord[]>(() => {
+    try {
+      const saved = localStorage.getItem('fichaplus_employees');
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          return parsed;
+        }
+      }
+    } catch (e) {
+      console.warn('Could not load employees from localStorage:', e);
+    }
+    return INITIAL_EMPLOYEES;
+  });
 
   // Find logged-in user employee record
   const currentEmployee = useMemo(() => {
@@ -836,44 +849,77 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     return () => clearInterval(interval);
   }, [isClockedIn, isPaused]);
 
+  // Safe firestore mutation helper with timeout guard so UI never hangs
+  const safeFirestoreWrite = async (op: Promise<any>, timeoutMs: number = 800): Promise<void> => {
+    try {
+      const timeout = new Promise<void>((resolve) => setTimeout(resolve, timeoutMs));
+      await Promise.race([op, timeout]);
+    } catch (err) {
+      console.warn('Firestore sync skipped or timed out:', err);
+    }
+  };
+
   // Firebase Firestore Listeners
   useEffect(() => {
     try {
       const qEntries = query(collection(db, 'time_entries'), orderBy('date', 'desc'), limit(30));
-      const unsubEntries = onSnapshot(qEntries, (snap) => {
-        if (!snap.empty) {
-          const list = snap.docs.map((d) => ({ id: d.id, ...d.data() } as TimeEntry));
-          setTimeEntries(list);
-        }
-      });
+      const unsubEntries = onSnapshot(
+        qEntries,
+        (snap) => {
+          if (!snap.empty) {
+            const list = snap.docs.map((d) => ({ id: d.id, ...d.data() } as TimeEntry));
+            setTimeEntries(list);
+          }
+        },
+        (err) => console.warn('Firestore time_entries listener warning:', err?.message)
+      );
 
-      const unsubEmployees = onSnapshot(collection(db, 'employees'), (snap) => {
-        if (!snap.empty) {
-          const list = snap.docs.map((d) => ({ id: d.id, ...d.data() } as EmployeeRecord));
-          setEmployees(list);
-        }
-      });
+      const unsubEmployees = onSnapshot(
+        collection(db, 'employees'),
+        (snap) => {
+          if (!snap.empty) {
+            const list = snap.docs.map((d) => ({ id: d.id, ...d.data() } as EmployeeRecord));
+            setEmployees(list);
+            try {
+              localStorage.setItem('fichaplus_employees', JSON.stringify(list));
+            } catch {}
+          }
+        },
+        (err) => console.warn('Firestore employees listener warning:', err?.message)
+      );
 
-      const unsubReqs = onSnapshot(collection(db, 'time_off_requests'), (snap) => {
-        if (!snap.empty) {
-          const list = snap.docs.map((d) => ({ id: d.id, ...d.data() } as TimeOffRequest));
-          setTimeOffRequests(list);
-        }
-      });
+      const unsubReqs = onSnapshot(
+        collection(db, 'time_off_requests'),
+        (snap) => {
+          if (!snap.empty) {
+            const list = snap.docs.map((d) => ({ id: d.id, ...d.data() } as TimeOffRequest));
+            setTimeOffRequests(list);
+          }
+        },
+        (err) => console.warn('Firestore time_off_requests listener warning:', err?.message)
+      );
 
-      const unsubIncidents = onSnapshot(collection(db, 'incidents'), (snap) => {
-        if (!snap.empty) {
-          const list = snap.docs.map((d) => ({ id: d.id, ...d.data() } as Incident));
-          setIncidents(list);
-        }
-      });
+      const unsubIncidents = onSnapshot(
+        collection(db, 'incidents'),
+        (snap) => {
+          if (!snap.empty) {
+            const list = snap.docs.map((d) => ({ id: d.id, ...d.data() } as Incident));
+            setIncidents(list);
+          }
+        },
+        (err) => console.warn('Firestore incidents listener warning:', err?.message)
+      );
 
-      const unsubAudit = onSnapshot(collection(db, 'audit_logs'), (snap) => {
-        if (!snap.empty) {
-          const list = snap.docs.map((d) => ({ id: d.id, ...d.data() } as AuditLog));
-          setAuditLogs(list);
-        }
-      });
+      const unsubAudit = onSnapshot(
+        collection(db, 'audit_logs'),
+        (snap) => {
+          if (!snap.empty) {
+            const list = snap.docs.map((d) => ({ id: d.id, ...d.data() } as AuditLog));
+            setAuditLogs(list);
+          }
+        },
+        (err) => console.warn('Firestore audit_logs listener warning:', err?.message)
+      );
 
       return () => {
         unsubEntries();
@@ -892,7 +938,17 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       ...empData,
       id: `emp-${Date.now()}`,
     };
-    setEmployees((prev) => [newEmp, ...prev]);
+    
+    // Immediately persist in memory and local storage
+    setEmployees((prev) => {
+      const updated = [newEmp, ...prev];
+      try {
+        localStorage.setItem('fichaplus_employees', JSON.stringify(updated));
+      } catch (err) {
+        console.warn('Error saving to localStorage:', err);
+      }
+      return updated;
+    });
 
     // Add audit log
     const hash = await generateSHA256(`ADD_EMPLOYEE_${newEmp.employeeNumber}_${newEmp.fullName}_${Date.now()}`);
@@ -910,28 +966,46 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     };
     setAuditLogs((prev) => [log, ...prev]);
 
-    try {
-      await addDoc(collection(db, 'employees'), newEmp);
-      await addDoc(collection(db, 'audit_logs'), log);
-    } catch (e) {
-      console.warn('Saved employee locally');
-    }
+    // Safe non-blocking sync with cloud
+    await safeFirestoreWrite(
+      Promise.all([
+        addDoc(collection(db, 'employees'), newEmp),
+        addDoc(collection(db, 'audit_logs'), log),
+      ]),
+      800
+    );
   };
 
   const updateEmployee = async (id: string, empUpdates: Partial<EmployeeRecord>) => {
-    setEmployees((prev) =>
-      prev.map((e) => (e.id === id ? { ...e, ...empUpdates } : e))
+    // Immediately persist in memory and local storage
+    setEmployees((prev) => {
+      const updated = prev.map((e) => (e.id === id ? { ...e, ...empUpdates } : e));
+      try {
+        localStorage.setItem('fichaplus_employees', JSON.stringify(updated));
+      } catch (err) {
+        console.warn('Error saving to localStorage:', err);
+      }
+      return updated;
+    });
+
+    // Safe non-blocking sync with cloud with timeout guard
+    await safeFirestoreWrite(
+      updateDoc(doc(db, 'employees', id), empUpdates),
+      800
     );
-    try {
-      await updateDoc(doc(db, 'employees', id), empUpdates);
-    } catch (e) {
-      console.warn('Updated employee locally');
-    }
   };
 
   const deleteEmployee = async (id: string) => {
     const target = employees.find((e) => e.id === id);
-    setEmployees((prev) => prev.filter((e) => e.id !== id));
+    setEmployees((prev) => {
+      const updated = prev.filter((e) => e.id !== id);
+      try {
+        localStorage.setItem('fichaplus_employees', JSON.stringify(updated));
+      } catch (err) {
+        console.warn('Error saving to localStorage:', err);
+      }
+      return updated;
+    });
 
     if (target) {
       const hash = await generateSHA256(`DELETE_EMPLOYEE_${target.employeeNumber}_${Date.now()}`);
@@ -948,10 +1022,13 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         securityHash: hash,
       };
       setAuditLogs((prev) => [log, ...prev]);
-      try {
-        await deleteDoc(doc(db, 'employees', id));
-        await addDoc(collection(db, 'audit_logs'), log);
-      } catch (e) {}
+      await safeFirestoreWrite(
+        Promise.all([
+          deleteDoc(doc(db, 'employees', id)),
+          addDoc(collection(db, 'audit_logs'), log),
+        ]),
+        800
+      );
     }
   };
 
@@ -1204,35 +1281,33 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       createdAt: new Date().toISOString().slice(0, 10),
     };
     setTimeOffRequests((prev) => [newReq, ...prev]);
-    try {
-      await addDoc(collection(db, 'time_off_requests'), newReq);
-    } catch (e) {
-      console.warn('Saved locally');
-    }
+    await safeFirestoreWrite(addDoc(collection(db, 'time_off_requests'), newReq), 800);
   };
 
   const approveTimeOffRequest = async (id: string) => {
     setTimeOffRequests((prev) =>
       prev.map((r) => (r.id === id ? { ...r, status: 'APROBADO', reviewedBy: profile.name } : r))
     );
-    try {
-      await updateDoc(doc(db, 'time_off_requests', id), {
+    await safeFirestoreWrite(
+      updateDoc(doc(db, 'time_off_requests', id), {
         status: 'APROBADO',
         reviewedBy: profile.name,
-      });
-    } catch (e) {}
+      }),
+      800
+    );
   };
 
   const rejectTimeOffRequest = async (id: string) => {
     setTimeOffRequests((prev) =>
       prev.map((r) => (r.id === id ? { ...r, status: 'RECHAZADO', reviewedBy: profile.name } : r))
     );
-    try {
-      await updateDoc(doc(db, 'time_off_requests', id), {
+    await safeFirestoreWrite(
+      updateDoc(doc(db, 'time_off_requests', id), {
         status: 'RECHAZADO',
         reviewedBy: profile.name,
-      });
-    } catch (e) {}
+      }),
+      800
+    );
   };
 
   const addIncident = async (inc: Omit<Incident, 'id' | 'createdAt' | 'status'>) => {
@@ -1243,9 +1318,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       createdAt: 'Hoy',
     };
     setIncidents((prev) => [newInc, ...prev]);
-    try {
-      await addDoc(collection(db, 'incidents'), newInc);
-    } catch (e) {}
+    await safeFirestoreWrite(addDoc(collection(db, 'incidents'), newInc), 800);
   };
 
   const approveIncident = async (id: string) => {
@@ -1271,17 +1344,18 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     };
     setAuditLogs((prev) => [log, ...prev]);
 
-    try {
-      await updateDoc(doc(db, 'incidents', id), { status: 'APROBADO' });
-      await addDoc(collection(db, 'audit_logs'), log);
-    } catch (e) {}
+    await safeFirestoreWrite(
+      Promise.all([
+        updateDoc(doc(db, 'incidents', id), { status: 'APROBADO' }),
+        addDoc(collection(db, 'audit_logs'), log),
+      ]),
+      800
+    );
   };
 
   const rejectIncident = async (id: string) => {
     setIncidents((prev) => prev.map((i) => (i.id === id ? { ...i, status: 'RECHAZADO' } : i)));
-    try {
-      await updateDoc(doc(db, 'incidents', id), { status: 'RECHAZADO' });
-    } catch (e) {}
+    await safeFirestoreWrite(updateDoc(doc(db, 'incidents', id), { status: 'RECHAZADO' }), 800);
   };
 
   const signMonthlyRecord = async (): Promise<string> => {
@@ -1440,9 +1514,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     setAccessRequests(updatedReqs);
     localStorage.setItem('fichaplus_access_requests', JSON.stringify(updatedReqs));
 
-    try {
-      await addDoc(collection(db, 'employees'), newEmp);
-    } catch (e) {}
+    await safeFirestoreWrite(addDoc(collection(db, 'employees'), newEmp), 800);
   };
 
   const rejectAccessRequest = async (id: string) => {
@@ -1455,8 +1527,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   const markEmployeeInvited = async (id: string, method: 'whatsapp' | 'email' | 'manual') => {
     const timestamp = new Date().toISOString();
-    setEmployees((prev) =>
-      prev.map((e) =>
+    setEmployees((prev) => {
+      const updated = prev.map((e) =>
         e.id === id
           ? {
               ...e,
@@ -1464,14 +1536,19 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
               invitationMethod: method,
             }
           : e
-      )
-    );
-    try {
-      await updateDoc(doc(db, 'employees', id), {
+      );
+      try {
+        localStorage.setItem('fichaplus_employees', JSON.stringify(updated));
+      } catch {}
+      return updated;
+    });
+    await safeFirestoreWrite(
+      updateDoc(doc(db, 'employees', id), {
         invitationSentAt: timestamp,
         invitationMethod: method,
-      });
-    } catch (e) {}
+      }),
+      800
+    );
   };
 
   const resetAllCompanyData = async (options?: {

@@ -57,6 +57,16 @@ service cloud.firestore {
     match /alarms/{alarmId} {
       allow read, write: if isAuthenticated();
     }
+
+    // Employees directory
+    match /employees/{employeeId} {
+      allow read, write: if isAuthenticated();
+    }
+
+    // Access requests
+    match /access_requests/{requestId} {
+      allow read, write: if isAuthenticated();
+    }
     
     // Company settings
     match /company_settings/{settingId} {
