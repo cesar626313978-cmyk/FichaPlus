@@ -129,6 +129,9 @@ export const DesktopNav: React.FC = () => {
             <button
               onClick={() => {
                 switchRole('employee');
+                if (['employees', 'settings', 'itss', 'audit'].includes(activeTab)) {
+                  setActiveTab('dashboard');
+                }
               }}
               className={`py-2 px-2 rounded-xl text-xs font-black transition-all cursor-pointer ${
                 !isAdmin

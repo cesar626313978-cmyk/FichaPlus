@@ -104,7 +104,8 @@ export const DashboardView: React.FC = () => {
 
   // Render the Clean, Mobile-First Terminal Clock component
   const renderTerminalClock = () => {
-    const employeeFirstName = currentEmployee?.name.split(' ')[0] || profile.name.split(' ')[0] || 'Usuario';
+    const rawName = currentEmployee?.fullName || (currentEmployee as any)?.name || profile?.name || 'Usuario';
+    const employeeFirstName = rawName.trim().split(' ')[0] || 'Usuario';
     const weeklyTarget = currentEmployee?.weeklyHours || 40;
 
     return (

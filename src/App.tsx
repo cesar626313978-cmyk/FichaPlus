@@ -5,6 +5,7 @@ import { Header } from './components/Header';
 import { DesktopNav } from './components/DesktopNav';
 import { BottomNav } from './components/BottomNav';
 import { PWAInstallModal } from './components/PWAInstallModal';
+import { ErrorBoundary } from './components/ErrorBoundary';
 
 import { LoginView } from './views/LoginView';
 import { DashboardView } from './views/DashboardView';
@@ -153,11 +154,13 @@ const MainLayout: React.FC = () => {
 
 export function App() {
   return (
-    <AuthProvider>
-      <AppProvider>
-        <MainLayout />
-      </AppProvider>
-    </AuthProvider>
+    <ErrorBoundary>
+      <AuthProvider>
+        <AppProvider>
+          <MainLayout />
+        </AppProvider>
+      </AuthProvider>
+    </ErrorBoundary>
   );
 }
 

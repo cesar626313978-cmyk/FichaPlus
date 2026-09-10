@@ -50,7 +50,7 @@ import {
 
 interface AppContextType {
   // Navigation
-  activeTab: 'dashboard' | 'history' | 'requests' | 'admin' | 'settings' | 'audit' | 'alarms' | 'notifications' | 'profile' | 'employees' | 'monthly_sign' | 'incidents';
+  activeTab: 'dashboard' | 'history' | 'requests' | 'admin' | 'settings' | 'audit' | 'alarms' | 'notifications' | 'profile' | 'employees' | 'monthly_sign' | 'incidents' | 'itss';
   setActiveTab: (tab: any) => void;
   
   // Logged-in Employee Shift Configuration (Calculated from HR setup)
@@ -134,6 +134,7 @@ interface AppContextType {
   }) => Promise<void>;
   markNotificationRead: (id: string) => void;
   markAllNotificationsRead: () => void;
+  clearAllNotifications: () => void;
 
   // PWA Modal & Install Detection
   isAppInstalled: boolean;
@@ -296,13 +297,34 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   // Find logged-in user employee record
   const currentEmployee = useMemo(() => {
-    return (
-      employees.find(
-        (e) =>
-          (profile?.id && e.id === profile.id) ||
-          (profile?.email && e.email.toLowerCase() === profile.email.toLowerCase())
-      ) || employees[0]
-    );
+    const found = employees.find(
+      (e) =>
+        (profile?.id && e.id === profile.id) ||
+        (profile?.email && e.email && e.email.toLowerCase() === profile.email.toLowerCase()) ||
+        (profile?.dni && e.dni && e.dni.toUpperCase() === profile.dni.toUpperCase())
+    ) || employees[0];
+
+    if (found) return found;
+
+    return {
+      id: profile?.id || 'emp-001',
+      employeeNumber: 'EMP-001',
+      fullName: profile?.name || 'César Hernández Moreno',
+      dni: profile?.dni || '12345678X',
+      email: profile?.email || 'cesar626313978@gmail.com',
+      phone: profile?.phone || '+34 626 313 978',
+      department: profile?.department || 'Desarrollo & RRHH',
+      jobTitle: profile?.jobTitle || 'Responsable de Personal',
+      contractType: profile?.contractType || 'Indefinido',
+      weeklyHours: profile?.weeklyHours || 40,
+      status: 'ACTIVO' as const,
+      avatarUrl: profile?.avatarUrl || MASTER_ADMIN_RECORD.avatarUrl,
+      hasRotatingShifts: false,
+      shiftWeekA: 'Continua (08:00 - 16:00)',
+      shiftWeekB: 'Continua (08:00 - 16:00)',
+      joinedDate: '2024-01-01',
+      pinCode: '1234',
+    };
   }, [employees, profile]);
 
   // Auto-heal, deduplicate, and guarantee Master Admin is ALWAYS restored
@@ -1385,6 +1407,13 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     setNotifications((prev) => prev.map((n) => ({ ...n, read: true })));
   };
 
+  const clearAllNotifications = () => {
+    setNotifications([]);
+    try {
+      localStorage.removeItem('fichaplus_notifications');
+    } catch {}
+  };
+
   const submitAccessRequest = async (req: Omit<AccessRequest, 'id' | 'requestedAt' | 'status'>) => {
     const newReq: AccessRequest = {
       ...req,
@@ -1782,6 +1811,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         resetAllCompanyData,
         markNotificationRead,
         markAllNotificationsRead,
+        clearAllNotifications,
         isAppInstalled,
         markAppAsInstalled,
         showInstallModal,

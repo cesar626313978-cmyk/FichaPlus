@@ -82,7 +82,7 @@ export const ProfileView: React.FC = () => {
           )}
 
           <button
-            onClick={signInWithGoogle}
+            onClick={() => signInWithGoogle()}
             className="bg-white hover:bg-slate-50 border border-slate-200 py-2.5 px-4 rounded-xl font-bold text-xs shadow-xs flex items-center gap-2 transition-all text-slate-700 cursor-pointer"
           >
             <span className="material-symbols-outlined text-base text-rose-500">account_circle</span>

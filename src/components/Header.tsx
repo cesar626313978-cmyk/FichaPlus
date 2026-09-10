@@ -216,7 +216,7 @@ export const Header: React.FC = () => {
             <UserAvatar name={profile.name} size="sm" rounded="xl" />
             <div className="text-left hidden sm:block">
               <p className="text-xs font-bold text-slate-800 leading-tight group-hover:text-indigo-600 truncate max-w-[100px]">
-                {profile.name.split(' ')[0]}
+                {(profile?.name || 'Usuario').trim().split(' ')[0]}
               </p>
               <p className="text-[10px] font-semibold text-slate-400 leading-tight">
                 {isAdmin ? 'Admin' : 'Empleado'}

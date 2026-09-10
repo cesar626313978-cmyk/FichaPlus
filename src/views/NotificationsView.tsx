@@ -50,15 +50,19 @@ export const NotificationsView: React.FC = () => {
             >
               <div
                 className={`w-10 h-10 rounded-2xl flex items-center justify-center shrink-0 ${
-                  n.type === 'ALERT'
+                  n.type === 'urgent' || n.type === 'warning'
                     ? 'bg-rose-50 text-rose-500'
-                    : n.type === 'SUCCESS'
+                    : n.type === 'approval'
                     ? 'bg-emerald-50 text-emerald-600'
                     : 'bg-indigo-50 text-indigo-600'
                 }`}
               >
                 <span className="material-symbols-outlined text-xl">
-                  {n.type === 'ALERT' ? 'warning' : n.type === 'SUCCESS' ? 'check_circle' : 'info'}
+                  {n.type === 'urgent' || n.type === 'warning'
+                    ? 'warning'
+                    : n.type === 'approval'
+                    ? 'check_circle'
+                    : 'info'}
                 </span>
               </div>
 
