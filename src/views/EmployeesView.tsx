@@ -34,6 +34,9 @@ export const EmployeesView: React.FC = () => {
     accessRequests,
     approveAccessRequest,
     rejectAccessRequest,
+    isCloudConnected,
+    isSyncingCloud,
+    syncAllLocalDataToFirestore,
   } = useApp();
   const { profile } = useAuth();
 
@@ -51,6 +54,7 @@ export const EmployeesView: React.FC = () => {
   const [successToast, setSuccessToast] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
   const [inviteModalEmployee, setInviteModalEmployee] = useState<EmployeeRecord | null>(null);
+  const [copiedLink, setCopiedLink] = useState(false);
 
   const pendingRequests = accessRequests.filter((r) => r.status === 'PENDIENTE');
 
@@ -360,13 +364,94 @@ export const EmployeesView: React.FC = () => {
           </p>
         </div>
 
-        <button
-          onClick={openNewEmployeeForm}
-          className="bg-white hover:bg-slate-50 text-indigo-900 font-black text-sm uppercase tracking-wider py-3.5 px-6 rounded-2xl shadow-lg hover:shadow-xl hover:scale-102 transition-all flex items-center gap-2 shrink-0 cursor-pointer"
-        >
-          <span className="material-symbols-outlined font-bold text-xl text-indigo-600">person_add</span>
-          <span>+ Nuevo Empleado</span>
-        </button>
+        <div className="flex flex-wrap items-center gap-2.5">
+          <button
+            type="button"
+            disabled={isSyncingCloud}
+            onClick={async () => {
+              const res = await syncAllLocalDataToFirestore();
+              setSuccessToast(res.message);
+              setTimeout(() => setSuccessToast(null), 5000);
+            }}
+            className="bg-indigo-700/60 hover:bg-indigo-700 text-white font-bold text-xs uppercase tracking-wider py-3.5 px-4 rounded-2xl border border-indigo-400/40 shadow-sm transition-all flex items-center gap-2 cursor-pointer disabled:opacity-50"
+            title="Sube y actualiza todos los empleados en la base de datos Firestore para que se vean al instante en el móvil"
+          >
+            <span className={`material-symbols-outlined text-lg ${isSyncingCloud ? 'animate-spin' : ''}`}>
+              {isSyncingCloud ? 'sync' : 'cloud_sync'}
+            </span>
+            <span>{isSyncingCloud ? 'Sincronizando...' : 'Sincronizar con Móviles'}</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => {
+              try {
+                navigator.clipboard.writeText(window.location.origin);
+                setCopiedLink(true);
+                setSuccessToast('✓ Enlace copiado al portapapeles. ¡Ábrelo o envíalo por WhatsApp a los móviles!');
+                setTimeout(() => {
+                  setCopiedLink(false);
+                  setSuccessToast(null);
+                }, 4500);
+              } catch {
+                setSuccessToast('Enlace de la app: ' + window.location.origin);
+              }
+            }}
+            className="bg-indigo-800/80 hover:bg-indigo-800 text-white font-bold text-xs uppercase tracking-wider py-3.5 px-4 rounded-2xl border border-indigo-400/30 shadow-sm transition-all flex items-center gap-2 cursor-pointer"
+            title="Copiar enlace para abrir en el teléfono de los empleados"
+          >
+            <span className="material-symbols-outlined text-lg text-amber-300">
+              {copiedLink ? 'task_alt' : 'smartphone'}
+            </span>
+            <span>{copiedLink ? '¡Enlace Copiado!' : 'Enlace Móvil'}</span>
+          </button>
+
+          <button
+            onClick={openNewEmployeeForm}
+            className="bg-white hover:bg-slate-50 text-indigo-900 font-black text-sm uppercase tracking-wider py-3.5 px-5 rounded-2xl shadow-lg hover:shadow-xl hover:scale-102 transition-all flex items-center gap-2 shrink-0 cursor-pointer"
+          >
+            <span className="material-symbols-outlined font-bold text-xl text-indigo-600">person_add</span>
+            <span>+ Nuevo Empleado</span>
+          </button>
+        </div>
+      </div>
+
+      {/* Cloud Sync Status Banner */}
+      <div className="bg-white/90 border border-emerald-200/80 rounded-2xl p-3.5 shadow-xs flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+        <div className="flex items-center gap-3">
+          <div className="w-8 h-8 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center shrink-0 border border-emerald-100">
+            <span className="material-symbols-outlined text-xl">cloud_done</span>
+          </div>
+          <div>
+            <div className="flex items-center gap-2">
+              <span className="inline-block w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse"></span>
+              <h4 className="text-xs font-black text-slate-800 uppercase tracking-wider">
+                Firebase Firestore Activo (Tiempo Real)
+              </h4>
+              <span className="text-[10px] font-bold bg-emerald-100 text-emerald-800 px-2 py-0.5 rounded-full">
+                {sanitizedEmployees.length} empleados sincronizados
+              </span>
+            </div>
+            <p className="text-[11px] text-slate-500 mt-0.5">
+              Los datos creados o modificados en el PC se reflejan instantáneamente en los teléfonos de los empleados sin recargar.
+            </p>
+          </div>
+        </div>
+
+        <div className="flex items-center gap-2 shrink-0 self-end sm:self-center">
+          <button
+            type="button"
+            onClick={async () => {
+              const res = await syncAllLocalDataToFirestore();
+              setSuccessToast(res.message);
+              setTimeout(() => setSuccessToast(null), 4000);
+            }}
+            className="text-xs font-bold text-indigo-600 hover:text-indigo-800 bg-indigo-50 hover:bg-indigo-100 px-3 py-1.5 rounded-xl transition-colors flex items-center gap-1.5 cursor-pointer"
+          >
+            <span className="material-symbols-outlined text-sm">refresh</span>
+            <span>Forzar Sincronización</span>
+          </button>
+        </div>
       </div>
 
       {/* Success Toast Notification */}

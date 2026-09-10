@@ -1,9 +1,12 @@
 {
-  "apiKey": "AIzaSyDummyKeyForAppletEnvironment001",
-  "authDomain": "fichaplus-app.firebaseapp.com",
-  "projectId": "fichaplus-app",
-  "storageBucket": "fichaplus-app.appspot.com",
-  "messagingSenderId": "123456789012",
-  "appId": "1:123456789012:web:abcdef123456",
-  "firestoreDatabaseId": "(default)"
+  "projectId": "gen-lang-client-0020489331",
+  "appId": "1:1094273500016:web:5494c4ac492ba3a24745b5",
+  "apiKey": "AIzaSyAivQHoGZgOJ_Ax14qykjv1411Tj4mNZs0",
+  "authDomain": "gen-lang-client-0020489331.firebaseapp.com",
+  "firestoreDatabaseId": "ai-studio-fichaplus-51968d4b-a58a-4396-ab0c-eac4060be6a6",
+  "storageBucket": "gen-lang-client-0020489331.firebasestorage.app",
+  "messagingSenderId": "1094273500016",
+  "measurementId": "",
+  "oAuthClientId": "1094273500016-jj1hfi1cv2p7ihqsvakmprpevd38ldau.apps.googleusercontent.com",
+  "recaptchaSiteKey": ""
 }

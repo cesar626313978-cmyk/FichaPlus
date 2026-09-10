@@ -1,82 +1,9 @@
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
-    // Helper function to check if user is authenticated
-    function isAuthenticated() {
-      return request.auth != null;
-    }
-    
-    // Helper function to check if user is admin or manager
-    function isAdminOrManager() {
-      return isAuthenticated() && (
-        request.auth.token.email.matches('.*admin.*') ||
-        request.auth.token.role == 'admin' ||
-        request.auth.token.role == 'manager'
-      );
-    }
-    
-    // User profile documents
-    match /users/{userId} {
-      allow read: if isAuthenticated();
-      allow write: if isAuthenticated() && (request.auth.uid == userId || isAdminOrManager());
-    }
-    
-    // Time entries
-    match /time_entries/{entryId} {
-      allow read: if isAuthenticated();
-      allow create: if isAuthenticated();
-      allow update, delete: if isAuthenticated();
-    }
-    
-    // Monthly signatures
-    match /monthly_signatures/{sigId} {
-      allow read: if isAuthenticated();
-      allow write: if isAuthenticated();
-    }
-    
-    // Time off requests (vacaciones)
-    match /time_off_requests/{reqId} {
-      allow read: if isAuthenticated();
-      allow write: if isAuthenticated();
-    }
-    
-    // Incidents and subsanaciones
-    match /incidents/{incidentId} {
-      allow read: if isAuthenticated();
-      allow write: if isAuthenticated();
-    }
-    
-    // Audit logs (immutable legal log)
-    match /audit_logs/{logId} {
-      allow read: if isAuthenticated();
-      allow create: if isAuthenticated();
-      allow update, delete: if isAdminOrManager();
-    }
-    
-    // Alarms configuration
-    match /alarms/{alarmId} {
-      allow read, write: if isAuthenticated();
-    }
-
-    // Employees directory
-    match /employees/{employeeId} {
-      allow read, write: if isAuthenticated();
-    }
-
-    // Access requests
-    match /access_requests/{requestId} {
-      allow read, write: if isAuthenticated();
-    }
-    
-    // Company settings
-    match /company_settings/{settingId} {
-      allow read: if isAuthenticated();
-      allow write: if isAuthenticated();
-    }
-    
-    // Notifications
-    match /notifications/{notifId} {
-      allow read, write: if isAuthenticated();
+    // Permite lectura y escritura en todas las colecciones para sincronización en tiempo real
+    match /{document=**} {
+      allow read, write: if true;
     }
   }
 }

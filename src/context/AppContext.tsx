@@ -46,6 +46,7 @@ import {
   areSamePerson,
   isMasterAdmin,
   MASTER_ADMIN_RECORD,
+  INITIAL_KNOWN_EMPLOYEES,
 } from '../utils/employeeUtils';
 
 interface AppContextType {
@@ -143,9 +144,14 @@ interface AppContextType {
   setShowInstallModal: (show: boolean) => void;
   deferredPrompt: any;
   installPWA: () => Promise<void>;
+
+  // Real-Time Cloud Sync (Firebase Firestore)
+  isCloudConnected: boolean;
+  isSyncingCloud: boolean;
+  syncAllLocalDataToFirestore: () => Promise<{ success: boolean; count: number; message: string }>;
 }
 
-const INITIAL_EMPLOYEES: EmployeeRecord[] = [MASTER_ADMIN_RECORD];
+const INITIAL_EMPLOYEES: EmployeeRecord[] = INITIAL_KNOWN_EMPLOYEES;
 
 const INITIAL_COMPANY: CompanySettings = {
   companyName: 'FichaPlus',
@@ -712,33 +718,110 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     return () => clearInterval(interval);
   }, [isClockedIn, isPaused]);
 
-  // Safe firestore mutation helper with timeout guard so UI never hangs
-  const safeFirestoreWrite = async (op: Promise<any>, timeoutMs: number = 800): Promise<void> => {
+  const [isCloudConnected, setIsCloudConnected] = useState<boolean>(true);
+  const [isSyncingCloud, setIsSyncingCloud] = useState<boolean>(false);
+
+  // Safe firestore mutation helper with generous timeout guard so UI never hangs
+  const safeFirestoreWrite = async (op: Promise<any>, timeoutMs: number = 6000): Promise<void> => {
     try {
       const timeout = new Promise<void>((resolve) => setTimeout(resolve, timeoutMs));
       await Promise.race([op, timeout]);
     } catch (err) {
-      console.warn('Firestore sync skipped or timed out:', err);
+      console.warn('Firestore sync warning:', err);
     }
   };
 
-  const safeFirestoreRead = async <T,>(op: Promise<T>, timeoutMs: number = 800): Promise<T | null> => {
+  const safeFirestoreRead = async <T,>(op: Promise<T>, timeoutMs: number = 4000): Promise<T | null> => {
     try {
       const timeout = new Promise<null>((resolve) => setTimeout(() => resolve(null), timeoutMs));
       return await Promise.race([op, timeout]);
     } catch (err) {
-      console.warn('Firestore read skipped or timed out:', err);
+      console.warn('Firestore read warning:', err);
       return null;
     }
   };
 
-  // Firebase Firestore Listeners with anti-mock filtering
+  // Manual or Triggered Full Cloud Sync: writes all local data to Firestore
+  const syncAllLocalDataToFirestore = async (): Promise<{ success: boolean; count: number; message: string }> => {
+    setIsSyncingCloud(true);
+    try {
+      let count = 0;
+      for (const emp of employees) {
+        if (emp?.id) {
+          await setDoc(doc(db, 'employees', emp.id), emp, { merge: true });
+          count++;
+        }
+      }
+      if (companySettings) {
+        await setDoc(doc(db, 'company_settings', 'main'), companySettings, { merge: true });
+      }
+      for (const entry of timeEntries.slice(0, 30)) {
+        if (entry?.id) {
+          await setDoc(doc(db, 'time_entries', entry.id), entry, { merge: true });
+        }
+      }
+      setIsSyncingCloud(false);
+      setIsCloudConnected(true);
+      return {
+        success: true,
+        count,
+        message: `¡Sincronización completada! ${count} empleados y registros sincronizados en Firebase Firestore.`,
+      };
+    } catch (err: any) {
+      setIsSyncingCloud(false);
+      console.warn('Sync to Firestore error:', err);
+      return {
+        success: false,
+        count: 0,
+        message: `Error al sincronizar con Firestore: ${err?.message || 'Verifica la conexión.'}`,
+      };
+    }
+  };
+
+  // Auto-sync initial local data to Firestore:
+  // When an admin or PC with employees connects and Firestore is empty or missing them,
+  // automatically upload the full employee roster to Firestore so mobile devices get them instantly.
+  useEffect(() => {
+    let isCancelled = false;
+    const autoPushEmployees = async () => {
+      try {
+        const snap = await getDocs(collection(db, 'employees'));
+        if (isCancelled) return;
+        setIsCloudConnected(true);
+
+        // If cloud is empty and local has employees, or local has more employees than cloud
+        if (employees.length > 0 && (snap.empty || employees.length > snap.size)) {
+          console.log(`[FichaPlus Cloud] Auto-uploading ${employees.length} employees to Firestore...`);
+          for (const emp of employees) {
+            if (emp?.id) {
+              await setDoc(doc(db, 'employees', emp.id), emp, { merge: true });
+            }
+          }
+          if (companySettings) {
+            await setDoc(doc(db, 'company_settings', 'main'), companySettings, { merge: true });
+          }
+          console.log('[FichaPlus Cloud] Auto-upload to Firestore completed successfully.');
+        }
+      } catch (err: any) {
+        console.warn('[FichaPlus Cloud] Auto-upload notice:', err?.message || err);
+      }
+    };
+
+    const timer = setTimeout(autoPushEmployees, 1500);
+    return () => {
+      isCancelled = true;
+      clearTimeout(timer);
+    };
+  }, [employees.length]);
+
+  // Firebase Firestore Listeners with anti-mock filtering and real-time live synchronization
   useEffect(() => {
     try {
-      const qEntries = query(collection(db, 'time_entries'), orderBy('date', 'desc'), limit(30));
+      const qEntries = query(collection(db, 'time_entries'), orderBy('date', 'desc'), limit(50));
       const unsubEntries = onSnapshot(
         qEntries,
         (snap) => {
+          setIsCloudConnected(true);
           if (!snap.empty) {
             const list = snap.docs
               .map((d) => ({ id: d.id, ...d.data() } as TimeEntry))
@@ -752,6 +835,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       const unsubEmployees = onSnapshot(
         collection(db, 'employees'),
         (snap) => {
+          setIsCloudConnected(true);
           if (!snap.empty) {
             const firestoreList = snap.docs.map((d) => {
               const data = d.data() as EmployeeRecord;
@@ -808,12 +892,27 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         (err) => console.warn('Firestore audit_logs listener warning:', err?.message)
       );
 
+      const unsubCompany = onSnapshot(
+        doc(db, 'company_settings', 'main'),
+        (snap) => {
+          if (snap.exists()) {
+            const data = snap.data() as CompanySettings;
+            setCompanySettings((prev) => ({ ...prev, ...data }));
+            try {
+              localStorage.setItem('fichaplus_company_settings', JSON.stringify(data));
+            } catch {}
+          }
+        },
+        (err) => console.warn('Firestore company_settings listener warning:', err?.message)
+      );
+
       return () => {
         unsubEntries();
         unsubEmployees();
         unsubReqs();
         unsubIncidents();
         unsubAudit();
+        unsubCompany();
       };
     } catch (err) {
       console.warn('Firestore real-time subscription fallback active:', err);
@@ -1381,8 +1480,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
 
   const updateCompanySettings = async (settings: Partial<CompanySettings>) => {
+    let finalSettings: CompanySettings | undefined;
     setCompanySettings((prev) => {
       const updated = { ...prev, ...settings };
+      finalSettings = updated;
       try {
         localStorage.setItem('fichaplus_company_settings', JSON.stringify(updated));
       } catch (e) {
@@ -1391,10 +1492,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       return updated;
     });
 
-    // Firestore async sync (non-blocking)
-    try {
-      addDoc(collection(db, 'company_settings'), settings).catch(() => {});
-    } catch (e) {}
+    // Firestore real-time doc sync
+    if (finalSettings) {
+      safeFirestoreWrite(setDoc(doc(db, 'company_settings', 'main'), finalSettings, { merge: true }), 4000);
+    }
   };
 
   const markNotificationRead = (id: string) => {
@@ -1818,6 +1919,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         setShowInstallModal,
         deferredPrompt,
         installPWA,
+        isCloudConnected,
+        isSyncingCloud,
+        syncAllLocalDataToFirestore,
         locationStamp,
         isLocatingGps,
         gpsError,
