@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { useApp } from '../context/AppContext';
 import { EmployeeInviteModal } from '../components/EmployeeInviteModal';
@@ -7,20 +7,86 @@ import { UserAvatar } from '../components/UserAvatar';
 
 export const ProfileView: React.FC = () => {
   const { profile, updateProfileData, signInWithGoogle, signOut } = useAuth();
-  const { companySettings, employees, markEmployeeInvited } = useApp();
+  const { companySettings, employees, updateEmployee, markEmployeeInvited } = useApp();
   const isAdmin = profile.role === 'admin' || profile.role === 'manager';
 
-  const [phone, setPhone] = useState(profile.phone);
-  const [dni, setDni] = useState(profile.dni);
+  // Find matching employee from company employee roster
+  const matchingEmployee: EmployeeRecord | undefined = employees.find(
+    (e) =>
+      (profile.id && e.id === profile.id) ||
+      (profile.email && e.email && e.email.trim().toLowerCase() === profile.email.trim().toLowerCase()) ||
+      (profile.name && e.fullName && e.fullName.trim().toLowerCase() === profile.name.trim().toLowerCase()) ||
+      (profile.dni && e.dni && e.dni.trim().toUpperCase() === profile.dni.trim().toUpperCase())
+  ) || (isAdmin ? employees.find((e) => e.id === 'emp-001' || e.role === 'admin') : undefined);
+
+  // Active data prioritizing company employee record over any stale local profile
+  const activeDni = matchingEmployee?.dni || profile.dni || '';
+  const activePhone = matchingEmployee?.phone || profile.phone || '';
+  const activeDepartment = matchingEmployee?.department || profile.department || '';
+  const activeJobTitle = matchingEmployee?.jobTitle || profile.jobTitle || '';
+  const activeContract = matchingEmployee?.contractType || profile.contractType || '';
+  const activeHours = matchingEmployee?.weeklyHours || profile.weeklyHours || 40;
+  const activeEmployeeNumber = matchingEmployee?.employeeNumber || 'EMP-001';
+
+  const [phone, setPhone] = useState(activePhone);
+  const [dni, setDni] = useState(activeDni);
   const [savedSuccess, setSavedSuccess] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [showInviteModal, setShowInviteModal] = useState(false);
+
+  // Keep local form input fields in sync if the employee record updates
+  useEffect(() => {
+    if (activeDni && activeDni !== dni) {
+      setDni(activeDni);
+    }
+  }, [activeDni]);
+
+  useEffect(() => {
+    if (activePhone && activePhone !== phone) {
+      setPhone(activePhone);
+    }
+  }, [activePhone]);
+
+  // Keep AuthContext profile synchronized with employee record
+  useEffect(() => {
+    if (matchingEmployee) {
+      if (
+        profile.dni !== matchingEmployee.dni ||
+        profile.department !== matchingEmployee.department ||
+        profile.jobTitle !== matchingEmployee.jobTitle ||
+        profile.weeklyHours !== matchingEmployee.weeklyHours ||
+        profile.contractType !== matchingEmployee.contractType ||
+        (matchingEmployee.phone && profile.phone !== matchingEmployee.phone)
+      ) {
+        updateProfileData({
+          dni: matchingEmployee.dni,
+          department: matchingEmployee.department,
+          jobTitle: matchingEmployee.jobTitle,
+          weeklyHours: matchingEmployee.weeklyHours,
+          contractType: matchingEmployee.contractType,
+          phone: matchingEmployee.phone || profile.phone,
+        });
+      }
+    }
+  }, [
+    matchingEmployee?.dni,
+    matchingEmployee?.department,
+    matchingEmployee?.jobTitle,
+    matchingEmployee?.weeklyHours,
+    matchingEmployee?.contractType,
+    matchingEmployee?.phone,
+  ]);
 
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsSaving(true);
     try {
-      await updateProfileData({ phone, dni });
+      const cleanDni = dni.trim().toUpperCase();
+      const cleanPhone = phone.trim();
+      await updateProfileData({ phone: cleanPhone, dni: cleanDni });
+      if (matchingEmployee?.id) {
+        await updateEmployee(matchingEmployee.id, { phone: cleanPhone, dni: cleanDni });
+      }
       setSavedSuccess(true);
       setTimeout(() => setSavedSuccess(false), 3000);
     } finally {
@@ -28,9 +94,7 @@ export const ProfileView: React.FC = () => {
     }
   };
 
-  const matchingEmployee: EmployeeRecord = employees.find(
-    (e) => e.dni === profile.dni || e.email === profile.email
-  ) || {
+  const fallbackEmployee: EmployeeRecord = matchingEmployee || {
     id: profile.id,
     employeeNumber: 'EMP-001',
     fullName: profile.name,
@@ -94,7 +158,7 @@ export const ProfileView: React.FC = () => {
       {/* Main Profile Card */}
       <div className="bg-white rounded-3xl border border-slate-100 p-6 sm:p-8 shadow-sm flex flex-col md:flex-row gap-6 items-center md:items-start">
         <UserAvatar
-          name={profile.name}
+          name={matchingEmployee?.fullName || profile.name}
           size="2xl"
           rounded="3xl"
           showBorder
@@ -104,22 +168,33 @@ export const ProfileView: React.FC = () => {
 
         <div className="flex-1 text-center md:text-left">
           <div className="flex flex-wrap items-center justify-center md:justify-start gap-2 mb-1.5">
-            <h2 className="font-bold text-2xl text-slate-900">{profile.name}</h2>
+            <h2 className="font-bold text-2xl text-slate-900">{matchingEmployee?.fullName || profile.name}</h2>
             <span className="bg-indigo-50 text-indigo-700 px-2.5 py-0.5 rounded-full font-bold text-xs">
-              {profile.jobTitle}
+              {activeJobTitle}
+            </span>
+            <span className="bg-slate-100 text-slate-700 font-mono px-2.5 py-0.5 rounded-full font-bold text-xs">
+              {activeEmployeeNumber}
             </span>
           </div>
-          <p className="text-xs font-mono text-slate-400 mb-4">{profile.email}</p>
+          <div className="flex flex-wrap items-center justify-center md:justify-start gap-3 text-xs font-mono text-slate-500 mb-4">
+            <span>{matchingEmployee?.email || profile.email}</span>
+            <span className="text-slate-300">•</span>
+            <span className="font-bold text-indigo-900 bg-indigo-50 px-2 py-0.5 rounded-md">DNI: {activeDni}</span>
+          </div>
 
           <div className="flex flex-wrap justify-center md:justify-start gap-2">
             <span className="bg-slate-50 text-slate-700 border border-slate-100 px-3 py-1.5 rounded-xl text-xs font-semibold">
-              🏢 Dpto: {profile.department}
+              🏢 Dpto: {activeDepartment}
             </span>
             <span className="bg-slate-50 text-slate-700 border border-slate-100 px-3 py-1.5 rounded-xl text-xs font-semibold">
-              📋 Contrato: {profile.contractType}
+              📋 Contrato: {activeContract}
             </span>
             <span className="bg-slate-50 text-slate-700 border border-slate-100 px-3 py-1.5 rounded-xl text-xs font-semibold">
-              ⏱ Jornada: {profile.weeklyHours}h/semana
+              ⏱ Jornada: {activeHours}h/semana
+            </span>
+            <span className="bg-amber-50 text-amber-900 border border-amber-200 px-3 py-1.5 rounded-xl text-xs font-semibold" title={fallbackEmployee.vacationNotes ? `Notas: ${fallbackEmployee.vacationNotes}` : undefined}>
+              🏖 Vacaciones: {fallbackEmployee.vacationDays ?? 30} días {fallbackEmployee.vacationDaysType === 'LABORABLES' ? 'laborables' : 'naturales'}
+              {fallbackEmployee.vacationNotes && ' ℹ️'}
             </span>
           </div>
         </div>

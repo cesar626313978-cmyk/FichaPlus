@@ -39,18 +39,18 @@ interface AuthContextType {
 }
 
 const DEFAULT_PROFILE: UserProfile = {
-  id: 'emp-001',
-  name: 'César Hernández Moreno',
-  email: 'cesar626313978@gmail.com',
+  id: MASTER_ADMIN_RECORD.id,
+  name: MASTER_ADMIN_RECORD.fullName,
+  email: MASTER_ADMIN_RECORD.email,
   role: 'admin',
-  avatarUrl: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=250&q=80',
-  dni: '12345678X',
-  phone: '+34 626 313 978',
-  department: 'Desarrollo & RRHH',
-  jobTitle: 'Responsable de Personal',
-  contractType: 'Indefinido',
-  weeklyHours: 40,
-  currentShift: 'Rotativo A/B',
+  avatarUrl: MASTER_ADMIN_RECORD.avatarUrl,
+  dni: MASTER_ADMIN_RECORD.dni, // '21493249W'
+  phone: MASTER_ADMIN_RECORD.phone,
+  department: MASTER_ADMIN_RECORD.department,
+  jobTitle: MASTER_ADMIN_RECORD.jobTitle,
+  contractType: MASTER_ADMIN_RECORD.contractType,
+  weeklyHours: MASTER_ADMIN_RECORD.weeklyHours,
+  currentShift: MASTER_ADMIN_RECORD.shiftWeekA,
 };
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -73,11 +73,39 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [profile, setProfile] = useState<UserProfile>(() => {
     try {
       const saved = localStorage.getItem('fichaplus_profile');
-      return saved ? JSON.parse(saved) : DEFAULT_PROFILE;
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        // Self-heal: If cached profile has the old demo placeholder '12345678X' or 'Desarrollo & RRHH', sync with MASTER_ADMIN_RECORD
+        if (
+          (parsed.dni === '12345678X' || parsed.department === 'Desarrollo & RRHH') &&
+          (parsed.email?.toLowerCase() === 'cesar626313978@gmail.com' || parsed.id === 'emp-001' || parsed.name?.includes('César'))
+        ) {
+          parsed.dni = MASTER_ADMIN_RECORD.dni;
+          parsed.department = parsed.department === 'Desarrollo & RRHH' ? MASTER_ADMIN_RECORD.department : parsed.department;
+          parsed.jobTitle = parsed.jobTitle === 'Responsable de Personal' ? MASTER_ADMIN_RECORD.jobTitle : parsed.jobTitle;
+          localStorage.setItem('fichaplus_profile', JSON.stringify(parsed));
+        }
+        return parsed;
+      }
+      return DEFAULT_PROFILE;
     } catch {
       return DEFAULT_PROFILE;
     }
   });
+
+  // Listen to profile updates emitted by employee updates
+  useEffect(() => {
+    const handleProfileSync = () => {
+      try {
+        const saved = localStorage.getItem('fichaplus_profile');
+        if (saved) {
+          setProfile(JSON.parse(saved));
+        }
+      } catch {}
+    };
+    window.addEventListener('fichaplus_profile_updated', handleProfileSync);
+    return () => window.removeEventListener('fichaplus_profile_updated', handleProfileSync);
+  }, []);
 
   const [isAuthenticated, setIsAuthenticated] = useState<boolean>(() => {
     try {

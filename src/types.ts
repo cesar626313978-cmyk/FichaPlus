@@ -50,6 +50,10 @@ export interface EmployeeRecord {
   saturdayReferenceDate?: string;
   worksSunday?: boolean;
   sundayShift?: string;
+  // Vacations configuration per employee
+  vacationDays?: number; // Total días de vacaciones asignados (por defecto en empresa: 30 días naturales)
+  vacationDaysType?: 'NATURALES' | 'LABORABLES'; // Tipo de cómputo: 'NATURALES' (30 días) o 'LABORABLES' (22 días)
+  vacationNotes?: string; // Motivo o desglose de días adicionales (ej. '+2 días por antigüedad/convenio')
   joinedDate: string;
   endDate?: string; // Fecha de baja para extrabajadores (custodia 4 años)
   pinCode?: string;

@@ -21,6 +21,8 @@ export const MASTER_ADMIN_RECORD: EmployeeRecord = {
   worksSaturday: true,
   saturdayPlan: 'ALTERNO_A',
   saturdayShift: 'Continua (09:00 - 14:00)',
+  vacationDays: 30,
+  vacationDaysType: 'NATURALES',
   joinedDate: '2022-03-15',
   pinCode: '1234',
 };
@@ -48,6 +50,8 @@ export const INITIAL_KNOWN_EMPLOYEES: EmployeeRecord[] = [
     worksSaturday: true,
     saturdayPlan: 'ALTERNO_B',
     saturdayShift: 'Continua (09:00 - 14:00)',
+    vacationDays: 30,
+    vacationDaysType: 'NATURALES',
     joinedDate: '2023-01-10',
     pinCode: '1234',
   },
@@ -72,6 +76,8 @@ export const INITIAL_KNOWN_EMPLOYEES: EmployeeRecord[] = [
     worksSaturday: true,
     saturdayPlan: 'ALTERNO_A',
     saturdayShift: 'Partida (09:00 - 14:00)',
+    vacationDays: 30,
+    vacationDaysType: 'NATURALES',
     joinedDate: '2023-05-15',
     pinCode: '1234',
   },
@@ -96,6 +102,8 @@ export const INITIAL_KNOWN_EMPLOYEES: EmployeeRecord[] = [
     worksSaturday: true,
     saturdayPlan: 'ALTERNO_B',
     saturdayShift: 'Continua (09:00 - 14:00)',
+    vacationDays: 30,
+    vacationDaysType: 'NATURALES',
     joinedDate: '2023-09-01',
     pinCode: '1234',
   },
@@ -383,5 +391,26 @@ export const mergeEmployees = (
 ): EmployeeRecord[] => {
   const combined = [...(localList || []), ...(firestoreList || [])];
   return reconcileAndDeduplicateEmployees(combined);
+};
+
+/**
+ * Returns the effective vacation days allocated to an employee (defaults to 30 days naturales).
+ */
+export const getEmployeeVacationDays = (emp?: Partial<EmployeeRecord> | null): number => {
+  if (!emp) return 30;
+  if (typeof emp.vacationDays === 'number' && emp.vacationDays > 0) {
+    return emp.vacationDays;
+  }
+  return 30;
+};
+
+/**
+ * Returns the vacation type: 'NATURALES' (default 30 days) or 'LABORABLES' (22 days).
+ */
+export const getEmployeeVacationType = (
+  emp?: Partial<EmployeeRecord> | null
+): 'NATURALES' | 'LABORABLES' => {
+  if (!emp) return 'NATURALES';
+  return emp.vacationDaysType === 'LABORABLES' ? 'LABORABLES' : 'NATURALES';
 };
 

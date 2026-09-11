@@ -315,19 +315,19 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     return {
       id: profile?.id || 'emp-001',
       employeeNumber: 'EMP-001',
-      fullName: profile?.name || 'César Hernández Moreno',
-      dni: profile?.dni || '12345678X',
-      email: profile?.email || 'cesar626313978@gmail.com',
-      phone: profile?.phone || '+34 626 313 978',
-      department: profile?.department || 'Desarrollo & RRHH',
-      jobTitle: profile?.jobTitle || 'Responsable de Personal',
+      fullName: profile?.name || MASTER_ADMIN_RECORD.fullName,
+      dni: profile?.dni || MASTER_ADMIN_RECORD.dni,
+      email: profile?.email || MASTER_ADMIN_RECORD.email,
+      phone: profile?.phone || MASTER_ADMIN_RECORD.phone,
+      department: profile?.department || MASTER_ADMIN_RECORD.department,
+      jobTitle: profile?.jobTitle || MASTER_ADMIN_RECORD.jobTitle,
       contractType: profile?.contractType || 'Indefinido',
       weeklyHours: profile?.weeklyHours || 40,
       status: 'ACTIVO' as const,
       avatarUrl: profile?.avatarUrl || MASTER_ADMIN_RECORD.avatarUrl,
       hasRotatingShifts: false,
-      shiftWeekA: 'Continua (08:00 - 16:00)',
-      shiftWeekB: 'Continua (08:00 - 16:00)',
+      shiftWeekA: MASTER_ADMIN_RECORD.shiftWeekA,
+      shiftWeekB: MASTER_ADMIN_RECORD.shiftWeekB,
       joinedDate: '2024-01-01',
       pinCode: '1234',
     };
@@ -1023,6 +1023,34 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       } catch (err) {
         console.warn('Error saving to localStorage:', err);
       }
+
+      // If updating the active user/admin profile, keep fichaplus_profile in sync
+      try {
+        const savedProf = localStorage.getItem('fichaplus_profile');
+        if (savedProf) {
+          const parsed = JSON.parse(savedProf);
+          if (
+            parsed.id === id ||
+            id === 'emp-001' ||
+            (cleanUpdates.email && parsed.email?.toLowerCase() === cleanUpdates.email.toLowerCase()) ||
+            (parsed.name && cleanUpdates.fullName && parsed.name.toLowerCase() === cleanUpdates.fullName.toLowerCase())
+          ) {
+            const updatedProf = {
+              ...parsed,
+              ...(cleanUpdates.dni ? { dni: cleanUpdates.dni } : {}),
+              ...(cleanUpdates.phone ? { phone: cleanUpdates.phone } : {}),
+              ...(cleanUpdates.department ? { department: cleanUpdates.department } : {}),
+              ...(cleanUpdates.jobTitle ? { jobTitle: cleanUpdates.jobTitle } : {}),
+              ...(cleanUpdates.fullName ? { name: cleanUpdates.fullName } : {}),
+              ...(cleanUpdates.weeklyHours ? { weeklyHours: cleanUpdates.weeklyHours } : {}),
+              ...(cleanUpdates.contractType ? { contractType: cleanUpdates.contractType } : {}),
+            };
+            localStorage.setItem('fichaplus_profile', JSON.stringify(updatedProf));
+            window.dispatchEvent(new Event('fichaplus_profile_updated'));
+          }
+        }
+      } catch {}
+
       return reconciled;
     });
 

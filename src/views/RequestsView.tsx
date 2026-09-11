@@ -4,7 +4,7 @@ import { useAuth } from '../context/AuthContext';
 import { UserAvatar } from '../components/UserAvatar';
 
 export const RequestsView: React.FC = () => {
-  const { timeOffRequests, addTimeOffRequest, approveTimeOffRequest, rejectTimeOffRequest } = useApp();
+  const { employees, timeOffRequests, addTimeOffRequest, approveTimeOffRequest, rejectTimeOffRequest } = useApp();
   const { profile } = useAuth();
   const isAdmin = profile.role === 'admin' || profile.role === 'manager';
 
@@ -18,10 +18,21 @@ export const RequestsView: React.FC = () => {
   const myRequests = timeOffRequests.filter((r) => r.userId === profile.id);
   const displayedHistory = isAdmin ? timeOffRequests : myRequests;
 
+  // Find employee custom vacation days configuration (default 30 días naturales)
+  const currentEmp = employees.find(
+    (e) =>
+      e.id === profile.id ||
+      (e.dni && profile.dni && e.dni.trim().toUpperCase() === profile.dni.trim().toUpperCase()) ||
+      (e.email && profile.email && e.email.trim().toLowerCase() === profile.email.trim().toLowerCase())
+  );
+  const totalAllocatedDays = currentEmp?.vacationDays ?? 30;
+  const vacationType = currentEmp?.vacationDaysType ?? 'NATURALES';
+  const vacationNotes = currentEmp?.vacationNotes;
+
   const usedDays = myRequests
     .filter((r) => r.leaveType === 'Vacaciones' && r.status === 'APROBADO')
     .reduce((sum, r) => sum + (r.daysCount || 1), 0);
-  const availableDays = Math.max(0, 22 - usedDays);
+  const availableDays = Math.max(0, totalAllocatedDays - usedDays);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -67,15 +78,23 @@ export const RequestsView: React.FC = () => {
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
         {/* Days Available Card */}
         <section className="bg-white rounded-3xl p-6 shadow-sm border border-slate-100 flex flex-col justify-center items-center text-center">
-          <span className="text-xs font-bold uppercase tracking-wider text-slate-400 mb-3">
-            Días Disponibles 2026
+          <span className="text-xs font-bold uppercase tracking-wider text-slate-400 mb-2">
+            Vacaciones Disponibles 2026
           </span>
-          <div className="w-24 h-24 rounded-3xl bg-amber-50 text-amber-500 flex items-center justify-center mb-3 shadow-inner">
+          <div className="w-24 h-24 rounded-3xl bg-amber-50 text-amber-500 flex items-center justify-center mb-2 shadow-inner">
             <span className="font-black text-4xl">{availableDays}</span>
           </div>
-          <p className="text-xs text-slate-500 max-w-[200px] leading-relaxed">
-            Días hábiles de vacaciones restantes para disfrutar este año.
+          <span className="text-xs font-bold text-slate-700">
+            de {totalAllocatedDays} días {vacationType === 'LABORABLES' ? 'laborables' : 'naturales'}
+          </span>
+          <p className="text-[11px] text-slate-400 max-w-[200px] leading-relaxed mt-1">
+            {usedDays > 0 ? `${usedDays} días disfrutados/aprobados.` : 'Sin días disfrutados todavía.'}
           </p>
+          {vacationNotes && (
+            <div className="mt-2.5 bg-amber-50 border border-amber-200/60 rounded-xl px-2.5 py-1 text-[10px] font-semibold text-amber-800 max-w-[210px] truncate" title={vacationNotes}>
+              📌 {vacationNotes}
+            </div>
+          )}
         </section>
 
         {/* New Request Form */}
@@ -177,47 +196,65 @@ export const RequestsView: React.FC = () => {
           </div>
 
           <div className="space-y-3">
-            {pendingRequests.map((req) => (
-              <div
-                key={req.id}
-                className="p-4 rounded-2xl bg-slate-50 border border-slate-100 flex flex-col md:flex-row justify-between items-start md:items-center gap-4 hover:bg-slate-100/60 transition-all"
-              >
-                <div className="flex items-center gap-3.5">
-                  <UserAvatar
-                    name={req.userName}
-                    size="md"
-                    rounded="2xl"
-                  />
-                  <div>
-                    <div className="flex items-center gap-2">
-                      <h4 className="font-bold text-sm text-slate-900">{req.userName}</h4>
-                      <span className="bg-white px-2 py-0.5 rounded-md border border-slate-200 text-[10px] font-bold text-slate-500">
-                        {req.department}
-                      </span>
+            {pendingRequests.map((req) => {
+              const reqEmp = employees.find(
+                (e) =>
+                  e.id === req.userId ||
+                  (e.fullName && req.userName && e.fullName.trim().toLowerCase() === req.userName.trim().toLowerCase())
+              );
+              const empVacDays = reqEmp?.vacationDays ?? 30;
+              const empVacType = reqEmp?.vacationDaysType ?? 'NATURALES';
+
+              return (
+                <div
+                  key={req.id}
+                  className="p-4 rounded-2xl bg-slate-50 border border-slate-100 flex flex-col md:flex-row justify-between items-start md:items-center gap-4 hover:bg-slate-100/60 transition-all"
+                >
+                  <div className="flex items-center gap-3.5">
+                    <UserAvatar
+                      name={req.userName}
+                      size="md"
+                      rounded="2xl"
+                    />
+                    <div>
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <h4 className="font-bold text-sm text-slate-900">{req.userName}</h4>
+                        <span className="bg-white px-2 py-0.5 rounded-md border border-slate-200 text-[10px] font-bold text-slate-500">
+                          {req.department}
+                        </span>
+                        <span className="bg-amber-100 text-amber-900 border border-amber-200 px-2 py-0.5 rounded-md text-[10px] font-bold">
+                          Cupo: {empVacDays} días ({empVacType === 'LABORABLES' ? 'lab.' : 'nat.'})
+                        </span>
+                      </div>
+                      <p className="text-xs text-slate-600 mt-0.5 font-medium">
+                        {req.leaveType} ({req.startDate} al {req.endDate}) • <span className="font-bold text-indigo-600">{req.daysCount} días</span>
+                      </p>
+                      {req.notes && <p className="text-xs italic text-slate-400 mt-0.5">"{req.notes}"</p>}
+                      {reqEmp?.vacationNotes && (
+                        <p className="text-[10px] text-amber-800 mt-0.5 font-semibold">
+                          ℹ️ Notas asignación: {reqEmp.vacationNotes}
+                        </p>
+                      )}
                     </div>
-                    <p className="text-xs text-slate-600 mt-0.5 font-medium">
-                      {req.leaveType} ({req.startDate} al {req.endDate}) • <span className="font-bold text-indigo-600">{req.daysCount} días</span>
-                    </p>
-                    {req.notes && <p className="text-xs italic text-slate-400 mt-0.5">"{req.notes}"</p>}
+                  </div>
+
+                  <div className="flex gap-2 w-full md:w-auto">
+                    <button
+                      onClick={() => rejectTimeOffRequest(req.id)}
+                      className="flex-1 md:flex-none bg-white hover:bg-rose-50 text-rose-600 border border-slate-200 px-4 py-2 text-xs font-bold rounded-xl transition-colors"
+                    >
+                      ✕ Rechazar
+                    </button>
+                    <button
+                      onClick={() => approveTimeOffRequest(req.id)}
+                      className="flex-1 md:flex-none bg-emerald-600 hover:bg-emerald-700 text-white px-4 py-2 text-xs font-bold rounded-xl shadow-xs transition-colors"
+                    >
+                      ✓ Aprobar
+                    </button>
                   </div>
                 </div>
-
-                <div className="flex gap-2 w-full md:w-auto">
-                  <button
-                    onClick={() => rejectTimeOffRequest(req.id)}
-                    className="flex-1 md:flex-none bg-white hover:bg-rose-50 text-rose-600 border border-slate-200 px-4 py-2 text-xs font-bold rounded-xl transition-colors"
-                  >
-                    ✕ Rechazar
-                  </button>
-                  <button
-                    onClick={() => approveTimeOffRequest(req.id)}
-                    className="flex-1 md:flex-none bg-emerald-600 hover:bg-emerald-700 text-white px-4 py-2 text-xs font-bold rounded-xl shadow-xs transition-colors"
-                  >
-                    ✓ Aprobar
-                  </button>
-                </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
         </section>
       )}

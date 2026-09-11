@@ -80,6 +80,45 @@ export const EmployeesView: React.FC = () => {
   const [saturdayShiftWeekB, setSaturdayShiftWeekB] = useState<string>('Continua (09:00 - 14:00)');
   const [pinCode, setPinCode] = useState('1234');
 
+  // Vacation configuration state for employee form
+  const [vacationDays, setVacationDays] = useState<number>(30);
+  const [vacationDaysType, setVacationDaysType] = useState<'NATURALES' | 'LABORABLES'>('NATURALES');
+  const [vacationNotes, setVacationNotes] = useState<string>('');
+
+  // Quick vacation modal state (allows modifying vacation directly from the card)
+  const [vacationModalEmployee, setVacationModalEmployee] = useState<EmployeeRecord | null>(null);
+  const [quickVacationDays, setQuickVacationDays] = useState<number>(30);
+  const [quickVacationType, setQuickVacationType] = useState<'NATURALES' | 'LABORABLES'>('NATURALES');
+  const [quickVacationNotes, setQuickVacationNotes] = useState<string>('');
+  const [isSavingVacation, setIsSavingVacation] = useState(false);
+
+  const openQuickVacationModal = (emp: EmployeeRecord) => {
+    setVacationModalEmployee(emp);
+    setQuickVacationDays(emp.vacationDays ?? 30);
+    setQuickVacationType(emp.vacationDaysType ?? 'NATURALES');
+    setQuickVacationNotes(emp.vacationNotes ?? '');
+  };
+
+  const handleSaveQuickVacation = async () => {
+    if (!vacationModalEmployee) return;
+    setIsSavingVacation(true);
+    try {
+      const finalDays = Math.max(1, Number(quickVacationDays) || 30);
+      await updateEmployee(vacationModalEmployee.id, {
+        vacationDays: finalDays,
+        vacationDaysType: quickVacationType,
+        vacationNotes: quickVacationNotes.trim(),
+      });
+      setSuccessToast(`✓ Vacaciones de "${vacationModalEmployee.fullName}" actualizadas a ${finalDays} días ${quickVacationType === 'LABORABLES' ? 'laborables' : 'naturales'}.`);
+      setVacationModalEmployee(null);
+      setTimeout(() => setSuccessToast(null), 3500);
+    } catch (err) {
+      setSuccessToast(`⚠️ Error al actualizar vacaciones: ${err instanceof Error ? err.message : 'Error'}`);
+    } finally {
+      setIsSavingVacation(false);
+    }
+  };
+
   const openNewEmployeeForm = () => {
     setEditingEmployeeId(null);
     setFullName('');
@@ -96,6 +135,10 @@ export const EmployeesView: React.FC = () => {
     setRotationStartDate(new Date().toISOString().slice(0, 10));
     setShiftWeekA('Continua (08:00 - 16:00)');
     setShiftWeekB('Partida (09:00 - 14:00 / 16:00 - 19:00)');
+    // Vacation defaults
+    setVacationDays(30);
+    setVacationDaysType('NATURALES');
+    setVacationNotes('');
     // Check if company operates on Saturdays
     const companySatEnabled = companySettings.operatingHours?.saturday?.enabled ?? true;
     setWorksSaturday(companySatEnabled);
@@ -134,6 +177,10 @@ export const EmployeesView: React.FC = () => {
     setSaturdayShift(emp.saturdayShift || 'Continua (09:00 - 14:00)');
     setSaturdayShiftWeekB(emp.saturdayShiftWeekB || emp.saturdayShift || 'Continua (09:00 - 14:00)');
     setPinCode(emp.pinCode || '1234');
+    // Load vacation configuration
+    setVacationDays(emp.vacationDays ?? 30);
+    setVacationDaysType(emp.vacationDaysType ?? 'NATURALES');
+    setVacationNotes(emp.vacationNotes ?? '');
     setIsFormOpen(true);
   };
 
@@ -161,6 +208,7 @@ export const EmployeesView: React.FC = () => {
         setIsSaving(true);
         try {
           const doesWorkSat = saturdayPlan !== 'NO';
+          const cleanVacDays = Math.max(1, Number(vacationDays) || 30);
           await updateEmployee(existingPerson.id, {
             fullName: cleanFullName,
             dni: trimmedDni || existingPerson.dni,
@@ -181,6 +229,9 @@ export const EmployeesView: React.FC = () => {
             saturdayShift,
             saturdayShiftWeekB,
             pinCode,
+            vacationDays: cleanVacDays,
+            vacationDaysType,
+            vacationNotes: vacationNotes.trim(),
           });
           setSuccessToast(`✓ ¡Ficha de "${cleanFullName}" actualizada correctamente (se fusionó para evitar duplicados)!`);
           setIsFormOpen(false);
@@ -240,6 +291,7 @@ export const EmployeesView: React.FC = () => {
       }
 
       const doesWorkSat = saturdayPlan !== 'NO';
+      const cleanVacDays = Math.max(1, Number(vacationDays) || 30);
 
       if (editingEmployeeId) {
         await updateEmployee(editingEmployeeId, {
@@ -263,6 +315,9 @@ export const EmployeesView: React.FC = () => {
           saturdayShift,
           saturdayShiftWeekB,
           pinCode,
+          vacationDays: cleanVacDays,
+          vacationDaysType,
+          vacationNotes: vacationNotes.trim(),
         });
         setSuccessToast(`✓ ¡Empleado "${cleanFullName}" actualizado con éxito!`);
       } else {
@@ -290,6 +345,9 @@ export const EmployeesView: React.FC = () => {
           saturdayShiftWeekB,
           joinedDate: new Date().toISOString().slice(0, 10),
           pinCode,
+          vacationDays: cleanVacDays,
+          vacationDaysType,
+          vacationNotes: vacationNotes.trim(),
         };
         const createdRecord = await addEmployee(newEmp);
         setSuccessToast(`✓ ¡"${cleanFullName}" añadido y guardado con éxito!`);
@@ -815,6 +873,33 @@ export const EmployeesView: React.FC = () => {
                   );
                 })()}
               </div>
+
+              {/* Vacation Quota Status Bar */}
+              <div className="col-span-2 sm:col-span-3 bg-amber-50/80 border border-amber-200/80 rounded-xl px-3 py-2 flex flex-wrap justify-between items-center gap-2">
+                <div className="flex items-center gap-1.5 flex-wrap">
+                  <span className="material-symbols-outlined text-sm text-amber-600">beach_access</span>
+                  <span className="text-xs font-black text-amber-950">
+                    {emp.vacationDays ?? 30} Días Vacaciones
+                  </span>
+                  <span className="text-[10px] font-bold text-amber-900 bg-amber-200/60 border border-amber-300 px-1.5 py-0.5 rounded-md">
+                    {emp.vacationDaysType === 'LABORABLES' ? 'Laborables (base 22)' : 'Naturales (base 30)'}
+                  </span>
+                  {emp.vacationNotes && (
+                    <span className="text-[10px] font-medium text-amber-900/90 italic truncate max-w-[200px]" title={emp.vacationNotes}>
+                      • {emp.vacationNotes}
+                    </span>
+                  )}
+                </div>
+                <button
+                  onClick={() => openQuickVacationModal(emp)}
+                  className="text-[11px] font-black text-amber-800 hover:text-amber-950 hover:underline flex items-center gap-1 cursor-pointer ml-auto bg-white/80 hover:bg-white px-2 py-0.5 rounded-lg border border-amber-200 shadow-2xs transition-all"
+                  title="Modificar días de vacaciones de este empleado"
+                >
+                  <span className="material-symbols-outlined text-xs text-amber-700">tune</span>
+                  <span>Modificar</span>
+                </button>
+              </div>
+
               <div className="col-span-2 sm:col-span-3 border-t border-slate-200/60 pt-2 flex flex-wrap justify-between items-center gap-2 text-[11px] text-slate-500">
                 <span className="flex items-center gap-1">
                   <span className="material-symbols-outlined text-sm text-slate-400">mail</span>
@@ -844,6 +929,15 @@ export const EmployeesView: React.FC = () => {
                       ✓
                     </span>
                   )}
+                </button>
+
+                <button
+                  onClick={() => openQuickVacationModal(emp)}
+                  className="bg-amber-50 hover:bg-amber-100 text-amber-900 border border-amber-200/80 px-2.5 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center gap-1 cursor-pointer shadow-2xs"
+                  title="Modificar días de vacaciones para este empleado"
+                >
+                  <span className="material-symbols-outlined text-sm text-amber-600">beach_access</span>
+                  <span>Vacaciones ({emp.vacationDays ?? 30}d)</span>
                 </button>
 
                 <button
@@ -1292,6 +1386,144 @@ export const EmployeesView: React.FC = () => {
                 )}
               </div>
 
+              {/* VACATION CONFIGURATION BLOCK */}
+              <div className="bg-amber-50/70 p-5 rounded-3xl border border-amber-200/80 space-y-4">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <span className="material-symbols-outlined text-xl text-amber-600">beach_access</span>
+                    <div>
+                      <h3 className="text-xs font-black uppercase tracking-wider text-amber-950">
+                        Vacaciones Anuales Asignadas
+                      </h3>
+                      <p className="text-[11px] text-amber-800/80 font-medium">
+                        Días por año natural para este empleado (Convenio / Base de empresa: 30 días naturales)
+                      </p>
+                    </div>
+                  </div>
+                  <span className="bg-amber-100 text-amber-900 border border-amber-300 px-3 py-1 rounded-xl text-xs font-black">
+                    {vacationDays} Días
+                  </span>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  {/* Vacation Days input + buttons */}
+                  <div>
+                    <label className="text-[11px] font-black uppercase tracking-wider text-slate-800 block mb-1.5">
+                      Número total de días *
+                    </label>
+                    <div className="flex items-center gap-2">
+                      <button
+                        type="button"
+                        onClick={() => setVacationDays((prev) => Math.max(1, Number(prev || 30) - 1))}
+                        className="w-10 h-10 rounded-xl bg-white border border-amber-300 text-amber-900 font-black text-lg hover:bg-amber-100 flex items-center justify-center cursor-pointer transition-colors"
+                        title="Restar 1 día"
+                      >
+                        -
+                      </button>
+                      <input
+                        type="number"
+                        min="1"
+                        max="365"
+                        required
+                        value={vacationDays}
+                        onChange={(e) => setVacationDays(Math.max(1, parseInt(e.target.value, 10) || 0))}
+                        className="flex-1 bg-white border border-amber-300 p-2.5 rounded-xl font-black text-slate-900 text-center text-base focus:border-amber-500 focus:ring-2 focus:ring-amber-200 focus:outline-none"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setVacationDays((prev) => Number(prev || 30) + 1)}
+                        className="w-10 h-10 rounded-xl bg-white border border-amber-300 text-amber-900 font-black text-lg hover:bg-amber-100 flex items-center justify-center cursor-pointer transition-colors"
+                        title="Añadir 1 día"
+                      >
+                        +
+                      </button>
+                    </div>
+                    {/* Quick presets */}
+                    <div className="flex flex-wrap items-center gap-1.5 mt-2">
+                      <span className="text-[10px] text-amber-900/70 font-bold">Ajustes:</span>
+                      <button
+                        type="button"
+                        onClick={() => setVacationDays(30)}
+                        className="px-2 py-0.5 rounded-lg bg-white border border-amber-300 text-[10px] font-bold text-amber-900 hover:bg-amber-100 cursor-pointer"
+                      >
+                        Base (30d)
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setVacationDays(31)}
+                        className="px-2 py-0.5 rounded-lg bg-white border border-amber-300 text-[10px] font-bold text-amber-900 hover:bg-amber-100 cursor-pointer"
+                      >
+                        +1 (31d)
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setVacationDays(32)}
+                        className="px-2 py-0.5 rounded-lg bg-white border border-amber-300 text-[10px] font-bold text-amber-900 hover:bg-amber-100 cursor-pointer"
+                      >
+                        +2 (32d)
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setVacationDays(35)}
+                        className="px-2 py-0.5 rounded-lg bg-white border border-amber-300 text-[10px] font-bold text-amber-900 hover:bg-amber-100 cursor-pointer"
+                      >
+                        +5 (35d)
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Computation type */}
+                  <div>
+                    <label className="text-[11px] font-black uppercase tracking-wider text-slate-800 block mb-1.5">
+                      Cómputo legal *
+                    </label>
+                    <div className="grid grid-cols-2 gap-2">
+                      <button
+                        type="button"
+                        onClick={() => setVacationDaysType('NATURALES')}
+                        className={`p-2.5 rounded-xl border text-xs font-black flex flex-col items-center justify-center transition-all cursor-pointer ${
+                          vacationDaysType === 'NATURALES'
+                            ? 'bg-amber-600 text-white border-amber-600 shadow-xs'
+                            : 'bg-white text-slate-700 border-amber-200 hover:bg-amber-50'
+                        }`}
+                      >
+                        <span>Días Naturales</span>
+                        <span className="text-[10px] opacity-80 font-normal">Base 30 días</span>
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setVacationDaysType('LABORABLES')}
+                        className={`p-2.5 rounded-xl border text-xs font-black flex flex-col items-center justify-center transition-all cursor-pointer ${
+                          vacationDaysType === 'LABORABLES'
+                            ? 'bg-amber-600 text-white border-amber-600 shadow-xs'
+                            : 'bg-white text-slate-700 border-amber-200 hover:bg-amber-50'
+                        }`}
+                      >
+                        <span>Días Laborables</span>
+                        <span className="text-[10px] opacity-80 font-normal">Base 22 días</span>
+                      </button>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Notes or Reason */}
+                <div>
+                  <label className="text-[11px] font-black uppercase tracking-wider text-slate-800 block mb-1">
+                    Motivo o desglose de días adicionales
+                  </label>
+                  <input
+                    type="text"
+                    value={vacationNotes}
+                    onChange={(e) => setVacationNotes(e.target.value)}
+                    placeholder="Ej. +2 días por antigüedad o convenio colectivo"
+                    className="w-full bg-white border border-amber-200 p-2.5 rounded-xl text-xs font-semibold text-slate-800 placeholder-slate-400 focus:border-amber-500 focus:ring-2 focus:ring-amber-200 focus:outline-none"
+                  />
+                  <p className="text-[10px] text-amber-800/80 mt-1 italic">
+                    Esta asignación se sincroniza en tiempo real en la nube y se aplica a las solicitudes y saldo de vacaciones del trabajador.
+                  </p>
+                </div>
+              </div>
+
               {/* Submit Buttons */}
               <div className="pt-4 flex gap-3">
                 <button
@@ -1324,6 +1556,185 @@ export const EmployeesView: React.FC = () => {
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* QUICK VACATION EDIT MODAL */}
+      {vacationModalEmployee && (
+        <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4 overflow-y-auto">
+          <div className="bg-white rounded-3xl shadow-2xl border border-slate-100 max-w-lg w-full p-6 sm:p-7 animate-in fade-in zoom-in duration-150">
+            <div className="flex items-center justify-between border-b border-amber-200 pb-3 mb-5">
+              <div className="flex items-center gap-2.5">
+                <div className="w-10 h-10 rounded-2xl bg-amber-100 text-amber-700 flex items-center justify-center">
+                  <span className="material-symbols-outlined text-2xl">beach_access</span>
+                </div>
+                <div>
+                  <h3 className="font-black text-lg text-slate-900">
+                    Modificar Días de Vacaciones
+                  </h3>
+                  <p className="text-xs text-slate-500">
+                    Empleado: <strong className="text-slate-800">{vacationModalEmployee.fullName}</strong> ({vacationModalEmployee.employeeNumber})
+                  </p>
+                </div>
+              </div>
+              <button
+                onClick={() => setVacationModalEmployee(null)}
+                className="w-8 h-8 rounded-full bg-slate-100 hover:bg-slate-200 text-slate-500 flex items-center justify-center font-bold text-sm cursor-pointer"
+              >
+                ✕
+              </button>
+            </div>
+
+            <div className="space-y-4">
+              <div className="bg-amber-50/80 border border-amber-200 rounded-2xl p-3.5 text-xs text-amber-900">
+                <p className="font-bold flex items-center gap-1.5">
+                  <span className="material-symbols-outlined text-base text-amber-700">info</span>
+                  Convenio / Régimen General: 30 días naturales
+                </p>
+                <p className="text-[11px] text-amber-800 mt-1">
+                  Puedes añadir o modificar los días de vacaciones correspondientes para este empleado por antigüedad, complementos o acuerdos individuales.
+                </p>
+              </div>
+
+              {/* Number of days */}
+              <div>
+                <label className="text-xs font-black uppercase tracking-wider text-slate-700 block mb-1.5">
+                  Días Totales Asignados
+                </label>
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setQuickVacationDays((prev) => Math.max(1, Number(prev || 30) - 1))}
+                    className="w-11 h-11 rounded-xl bg-slate-100 hover:bg-amber-100 text-slate-800 hover:text-amber-900 font-black text-xl flex items-center justify-center cursor-pointer transition-colors"
+                    title="Restar 1 día"
+                  >
+                    -
+                  </button>
+                  <input
+                    type="number"
+                    min="1"
+                    max="365"
+                    value={quickVacationDays}
+                    onChange={(e) => setQuickVacationDays(Math.max(1, parseInt(e.target.value, 10) || 0))}
+                    className="flex-1 bg-slate-50 border-2 border-amber-300 p-2.5 rounded-xl font-black text-xl text-slate-900 text-center focus:bg-white focus:outline-none focus:border-amber-600"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setQuickVacationDays((prev) => Number(prev || 30) + 1)}
+                    className="w-11 h-11 rounded-xl bg-slate-100 hover:bg-amber-100 text-slate-800 hover:text-amber-900 font-black text-xl flex items-center justify-center cursor-pointer transition-colors"
+                    title="Añadir 1 día"
+                  >
+                    +
+                  </button>
+                </div>
+
+                <div className="flex flex-wrap gap-1.5 mt-2">
+                  <span className="text-[10px] text-slate-400 font-bold self-center">Accesos rápidos:</span>
+                  <button
+                    type="button"
+                    onClick={() => setQuickVacationDays(30)}
+                    className="px-2.5 py-1 rounded-lg bg-slate-100 hover:bg-amber-100 text-xs font-bold text-slate-700 hover:text-amber-900 transition-colors cursor-pointer"
+                  >
+                    30 días (Base)
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setQuickVacationDays(31)}
+                    className="px-2.5 py-1 rounded-lg bg-slate-100 hover:bg-amber-100 text-xs font-bold text-slate-700 hover:text-amber-900 transition-colors cursor-pointer"
+                  >
+                    31 días (+1)
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setQuickVacationDays(32)}
+                    className="px-2.5 py-1 rounded-lg bg-slate-100 hover:bg-amber-100 text-xs font-bold text-slate-700 hover:text-amber-900 transition-colors cursor-pointer"
+                  >
+                    32 días (+2)
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setQuickVacationDays(35)}
+                    className="px-2.5 py-1 rounded-lg bg-slate-100 hover:bg-amber-100 text-xs font-bold text-slate-700 hover:text-amber-900 transition-colors cursor-pointer"
+                  >
+                    35 días (+5)
+                  </button>
+                </div>
+              </div>
+
+              {/* Type */}
+              <div>
+                <label className="text-xs font-black uppercase tracking-wider text-slate-700 block mb-1.5">
+                  Tipo de Cómputo
+                </label>
+                <div className="grid grid-cols-2 gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setQuickVacationType('NATURALES')}
+                    className={`py-2 px-3 rounded-xl border text-xs font-bold flex items-center justify-center gap-1.5 transition-all cursor-pointer ${
+                      quickVacationType === 'NATURALES'
+                        ? 'bg-amber-600 text-white border-amber-600 shadow-xs'
+                        : 'bg-slate-50 text-slate-700 border-slate-200 hover:bg-slate-100'
+                    }`}
+                  >
+                    <span>Días Naturales (30d)</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setQuickVacationType('LABORABLES')}
+                    className={`py-2 px-3 rounded-xl border text-xs font-bold flex items-center justify-center gap-1.5 transition-all cursor-pointer ${
+                      quickVacationType === 'LABORABLES'
+                        ? 'bg-amber-600 text-white border-amber-600 shadow-xs'
+                        : 'bg-slate-50 text-slate-700 border-slate-200 hover:bg-slate-100'
+                    }`}
+                  >
+                    <span>Días Laborables (22d)</span>
+                  </button>
+                </div>
+              </div>
+
+              {/* Notes */}
+              <div>
+                <label className="text-xs font-black uppercase tracking-wider text-slate-700 block mb-1.5">
+                  Motivo o Detalle de la Asignación
+                </label>
+                <input
+                  type="text"
+                  value={quickVacationNotes}
+                  onChange={(e) => setQuickVacationNotes(e.target.value)}
+                  placeholder="Ej. +2 días concedidos por antigüedad / convenio"
+                  className="w-full bg-slate-50 border border-slate-200 p-2.5 rounded-xl text-xs font-semibold text-slate-800 placeholder-slate-400 focus:bg-white focus:ring-2 focus:ring-amber-400 focus:outline-none"
+                />
+              </div>
+            </div>
+
+            <div className="flex gap-2.5 pt-5 mt-4 border-t border-slate-100">
+              <button
+                type="button"
+                onClick={() => setVacationModalEmployee(null)}
+                className="flex-1 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold py-3 px-4 rounded-xl text-xs transition-colors cursor-pointer"
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                disabled={isSavingVacation}
+                onClick={handleSaveQuickVacation}
+                className="flex-1 bg-amber-600 hover:bg-amber-700 text-white font-black py-3 px-4 rounded-xl text-xs shadow-md shadow-amber-200 transition-all cursor-pointer flex items-center justify-center gap-1.5"
+              >
+                {isSavingVacation ? (
+                  <>
+                    <span className="material-symbols-outlined text-base animate-spin">progress_activity</span>
+                    <span>Guardando...</span>
+                  </>
+                ) : (
+                  <>
+                    <span className="material-symbols-outlined text-base">save</span>
+                    <span>Guardar Vacaciones</span>
+                  </>
+                )}
+              </button>
+            </div>
           </div>
         </div>
       )}
