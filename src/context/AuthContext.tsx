@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useEffect } from 'react';
+import React, { createContext, useContext, useState, useEffect, useMemo } from 'react';
 import { User, signInWithPopup, signOut as fbSignOut, onAuthStateChanged } from 'firebase/auth';
 import { doc, getDoc, setDoc } from 'firebase/firestore';
 import { auth, db, googleProvider } from '../firebase';
@@ -20,6 +20,7 @@ interface AuthContextType {
   profile: UserProfile;
   isAuthenticated: boolean;
   loading: boolean;
+  isActualAdmin: boolean;
   signInFast: (identifier: string) => Promise<AuthResult>;
   signInWithGoogle: (fallbackEmail?: string) => Promise<AuthResult>;
   signInWithEmailAndPin: (email: string, pin?: string) => Promise<AuthResult>;
@@ -118,6 +119,40 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   });
   const [loading, setLoading] = useState(false);
+
+  // Determine if this user is a genuine Administrator/Owner with privileges to switch roles
+  const isActualAdmin = useMemo(() => {
+    if (
+      profile.email?.trim().toLowerCase() === 'cesar626313978@gmail.com' ||
+      profile.id === 'emp-001' ||
+      profile.dni?.trim().toUpperCase() === '21493249W' ||
+      user?.email?.trim().toLowerCase() === 'cesar626313978@gmail.com'
+    ) {
+      return true;
+    }
+    if (localStorage.getItem('fichaplus_admin_privilege') === 'true') {
+      return true;
+    }
+    const emps = getKnownEmployees();
+    const foundEmp = emps.find(
+      (e) =>
+        (profile.email && e.email && e.email.trim().toLowerCase() === profile.email.trim().toLowerCase()) ||
+        (profile.id && e.id === profile.id) ||
+        (user?.email && e.email && e.email.trim().toLowerCase() === user.email.trim().toLowerCase())
+    );
+    if (foundEmp && (foundEmp.role === 'admin' || foundEmp.role === 'manager' || foundEmp.id === 'emp-001')) {
+      return true;
+    }
+    return false;
+  }, [profile.email, profile.id, profile.dni, user?.email]);
+
+  useEffect(() => {
+    if (isActualAdmin) {
+      try {
+        localStorage.setItem('fichaplus_admin_privilege', 'true');
+      } catch {}
+    }
+  }, [isActualAdmin]);
 
   // Check Magic Login Links in URL parameters (?email=... or ?invite=...)
   useEffect(() => {
@@ -235,6 +270,16 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     localStorage.removeItem('fichaplus_logged_out');
     localStorage.setItem('fichaplus_session_active', 'true');
     localStorage.setItem('fichaplus_profile', JSON.stringify(p));
+    if (
+      p.role === 'admin' ||
+      p.role === 'manager' ||
+      p.id === 'emp-001' ||
+      p.email?.toLowerCase() === 'cesar626313978@gmail.com'
+    ) {
+      try {
+        localStorage.setItem('fichaplus_admin_privilege', 'true');
+      } catch {}
+    }
   };
 
   const checkInvitationStatus = (query: string): { isInvited: boolean; employee?: EmployeeRecord; reason?: string } => {
@@ -490,6 +535,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const signOut = async () => {
     localStorage.setItem('fichaplus_logged_out', 'true');
     localStorage.removeItem('fichaplus_session_active');
+    try {
+      localStorage.removeItem('fichaplus_admin_privilege');
+    } catch {}
     setIsAuthenticated(false);
     setUser(null);
     try {
@@ -527,6 +575,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         profile,
         isAuthenticated,
         loading,
+        isActualAdmin,
         signInFast,
         signInWithGoogle,
         signInWithEmailAndPin,

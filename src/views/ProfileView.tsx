@@ -6,7 +6,7 @@ import { EmployeeRecord } from '../types';
 import { UserAvatar } from '../components/UserAvatar';
 
 export const ProfileView: React.FC = () => {
-  const { profile, updateProfileData, signInWithGoogle, signOut } = useAuth();
+  const { profile, updateProfileData, signInWithGoogle, signOut, switchRole, isActualAdmin } = useAuth();
   const { companySettings, employees, updateEmployee, markEmployeeInvited } = useApp();
   const isAdmin = profile.role === 'admin' || profile.role === 'manager';
 
@@ -119,12 +119,18 @@ export const ProfileView: React.FC = () => {
       {/* Header */}
       <div className="flex flex-col sm:flex-row justify-between sm:items-end gap-4 pb-2">
         <div>
-          <div className="flex items-center gap-2 mb-1">
+          <div className="flex items-center gap-2 mb-1 flex-wrap">
             <span className={`text-[10px] font-black uppercase tracking-wider px-2.5 py-0.5 rounded-full ${
               isAdmin ? 'bg-purple-100 text-purple-800' : 'bg-indigo-100 text-indigo-800'
             }`}>
               {isAdmin ? 'Superusuario / Administrador' : 'Empleado / Usuario'}
             </span>
+            {isActualAdmin && !isAdmin && (
+              <span className="text-[10px] font-bold bg-amber-100 text-amber-900 border border-amber-300 px-2.5 py-0.5 rounded-full flex items-center gap-1">
+                <span className="material-symbols-outlined text-xs">badge</span>
+                Vista de Empleado (Admin Autorizado)
+              </span>
+            )}
           </div>
           <h1 className="font-black text-3xl md:text-4xl text-slate-900 tracking-tight">
             {isAdmin ? 'Perfil del Administrador' : 'Mi Perfil Laboral'}
@@ -154,6 +160,82 @@ export const ProfileView: React.FC = () => {
           </button>
         </div>
       </div>
+
+      {/* Role Switcher Card - Exclusively for Administrator on Phone / Mobile / Desktop */}
+      {isActualAdmin && (
+        <div className="bg-gradient-to-br from-slate-900 via-indigo-950 to-slate-900 text-white rounded-3xl p-5 sm:p-6 shadow-md border border-slate-800">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-3">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-2xl bg-amber-400/20 text-amber-300 flex items-center justify-center border border-amber-400/30 shrink-0">
+                <span className="material-symbols-outlined text-2xl">admin_panel_settings</span>
+              </div>
+              <div>
+                <h3 className="font-bold text-sm sm:text-base text-white flex items-center gap-2 flex-wrap">
+                  <span>Opciones de Rol de Acceso</span>
+                  <span className="bg-amber-400 text-slate-950 text-[10px] font-black px-2 py-0.5 rounded-md tracking-wider">
+                    SOLO ADMINISTRADOR
+                  </span>
+                </h3>
+                <p className="text-xs text-slate-300 mt-0.5">
+                  Alterna las funciones de la aplicación en este dispositivo entre la gestión integral de la empresa y tu propio puesto de trabajo como empleado.
+                </p>
+              </div>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mt-4">
+            <button
+              type="button"
+              onClick={() => switchRole('admin')}
+              className={`p-4 rounded-2xl text-xs font-bold transition-all flex items-center justify-between border cursor-pointer ${
+                isAdmin
+                  ? 'bg-indigo-600 border-indigo-500 text-white shadow-lg ring-2 ring-indigo-400/50'
+                  : 'bg-slate-800/80 border-slate-700/80 text-slate-300 hover:bg-slate-800 hover:text-white'
+              }`}
+            >
+              <div className="flex items-center gap-3 text-left">
+                <div className={`w-9 h-9 rounded-xl flex items-center justify-center ${isAdmin ? 'bg-white/20' : 'bg-slate-700'}`}>
+                  <span className="material-symbols-outlined text-xl">shield_person</span>
+                </div>
+                <div>
+                  <span className="block font-black text-sm">Modo Administrador</span>
+                  <span className="text-[11px] opacity-80 font-normal">Supervisión, Plantilla, Permisos e Informes</span>
+                </div>
+              </div>
+              {isAdmin && (
+                <span className="bg-white text-indigo-900 text-[10px] font-black px-2.5 py-1 rounded-full shadow-xs">
+                  ACTIVO
+                </span>
+              )}
+            </button>
+
+            <button
+              type="button"
+              onClick={() => switchRole('employee')}
+              className={`p-4 rounded-2xl text-xs font-bold transition-all flex items-center justify-between border cursor-pointer ${
+                !isAdmin
+                  ? 'bg-emerald-600 border-emerald-500 text-white shadow-lg ring-2 ring-emerald-400/50'
+                  : 'bg-slate-800/80 border-slate-700/80 text-slate-300 hover:bg-slate-800 hover:text-white'
+              }`}
+            >
+              <div className="flex items-center gap-3 text-left">
+                <div className={`w-9 h-9 rounded-xl flex items-center justify-center ${!isAdmin ? 'bg-white/20' : 'bg-slate-700'}`}>
+                  <span className="material-symbols-outlined text-xl">badge</span>
+                </div>
+                <div>
+                  <span className="block font-black text-sm">Rol de Empleado</span>
+                  <span className="text-[11px] opacity-80 font-normal">Mi Fichaje, Mis Vacaciones, Mi Firma Mensual</span>
+                </div>
+              </div>
+              {!isAdmin && (
+                <span className="bg-white text-emerald-900 text-[10px] font-black px-2.5 py-1 rounded-full shadow-xs">
+                  ACTIVO
+                </span>
+              )}
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* Main Profile Card */}
       <div className="bg-white rounded-3xl border border-slate-100 p-6 sm:p-8 shadow-sm flex flex-col md:flex-row gap-6 items-center md:items-start">

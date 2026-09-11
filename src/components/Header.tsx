@@ -4,7 +4,7 @@ import { useApp } from '../context/AppContext';
 import { UserAvatar } from './UserAvatar';
 
 export const Header: React.FC = () => {
-  const { profile, signOut } = useAuth();
+  const { profile, signOut, switchRole, isActualAdmin } = useAuth();
   const { activeTab, notifications, setActiveTab, setShowInstallModal, isAppInstalled } = useApp();
   const unreadCount = notifications.filter((n) => !n.read).length;
 
@@ -235,6 +235,48 @@ export const Header: React.FC = () => {
           </button>
         </div>
       </div>
+
+      {/* Mobile Role Switcher - Exclusively for Administrator on Phone/Mobile View */}
+      {isActualAdmin && (
+        <div className="md:hidden bg-slate-900 text-white px-4 py-2 flex items-center justify-between border-t border-slate-800 shadow-inner">
+          <div className="flex items-center gap-1.5">
+            <span className="material-symbols-outlined text-amber-400 text-base">
+              {isAdmin ? 'admin_panel_settings' : 'badge'}
+            </span>
+            <span className="text-[11px] font-medium text-slate-300">
+              Rol Móvil: <strong className="text-white font-bold">{isAdmin ? 'Admin / RRHH' : 'Empleado'}</strong>
+            </span>
+          </div>
+          <div className="flex items-center gap-1 bg-slate-800 p-0.5 rounded-xl border border-slate-700">
+            <button
+              onClick={() => {
+                switchRole('admin');
+                setActiveTab('dashboard');
+              }}
+              className={`px-3 py-1 rounded-lg text-xs font-black transition-all cursor-pointer ${
+                isAdmin
+                  ? 'bg-indigo-600 text-white shadow-xs'
+                  : 'text-slate-400 hover:text-white'
+              }`}
+            >
+              🛡️ Admin
+            </button>
+            <button
+              onClick={() => {
+                switchRole('employee');
+                setActiveTab('dashboard');
+              }}
+              className={`px-3 py-1 rounded-lg text-xs font-black transition-all cursor-pointer ${
+                !isAdmin
+                  ? 'bg-emerald-600 text-white shadow-xs'
+                  : 'text-slate-400 hover:text-white'
+              }`}
+            >
+              👤 Empleado
+            </button>
+          </div>
+        </div>
+      )}
     </header>
   );
 };
