@@ -278,6 +278,21 @@ export const ProfileView: React.FC = () => {
               🏖 Vacaciones: {fallbackEmployee.vacationDays ?? 30} días {fallbackEmployee.vacationDaysType === 'LABORABLES' ? 'laborables' : 'naturales'}
               {fallbackEmployee.vacationNotes && ' ℹ️'}
             </span>
+            {(() => {
+              const locs =
+                matchingEmployee?.allowedWorkLocations && matchingEmployee.allowedWorkLocations.length > 0
+                  ? matchingEmployee.allowedWorkLocations
+                  : (['presencial', 'teletrabajo', 'cliente'] as const);
+              const label =
+                locs.length === 3
+                  ? 'Oficina, Casa y Ruta'
+                  : locs.map((l) => (l === 'presencial' ? 'Oficina' : l === 'teletrabajo' ? 'Casa' : 'Ruta')).join(' + ');
+              return (
+                <span className="bg-indigo-50 text-indigo-900 border border-indigo-200 px-3 py-1.5 rounded-xl text-xs font-semibold">
+                  📍 Modalidad fichaje: {label}
+                </span>
+              );
+            })()}
           </div>
         </div>
       </div>

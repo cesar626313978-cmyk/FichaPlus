@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { useApp } from '../context/AppContext';
 import { useAuth } from '../context/AuthContext';
 import { DevicePermissionsModal } from '../components/DevicePermissionsModal';
@@ -58,6 +58,22 @@ export const DashboardView: React.FC = () => {
 
   // Confirmation Modal State (Antierror safety)
   const [confirmModalAction, setConfirmModalAction] = useState<ClockActionType | null>(null);
+
+  // Filtered allowed work location options for the active employee
+  const employeeAllowedLocations = useMemo<('presencial' | 'teletrabajo' | 'cliente')[]>(() => {
+    const raw = currentEmployee?.allowedWorkLocations;
+    if (Array.isArray(raw) && raw.length > 0) {
+      return raw;
+    }
+    return ['presencial', 'teletrabajo', 'cliente'];
+  }, [currentEmployee?.allowedWorkLocations]);
+
+  // Ensure selected workType is always among the allowed locations for this employee
+  useEffect(() => {
+    if (employeeAllowedLocations.length > 0 && !employeeAllowedLocations.includes(workType)) {
+      setWorkType(employeeAllowedLocations[0]);
+    }
+  }, [employeeAllowedLocations, workType, setWorkType]);
 
   // Compute if the employee actually has registered entries or hours to sign in the monthly report
   const userEntriesForSign = (timeEntries || []).filter(
@@ -153,25 +169,50 @@ export const DashboardView: React.FC = () => {
             </div>
           </div>
 
-          {/* Quick Work Location Mode Selector */}
-          <div className="mb-3 flex justify-center gap-1.5 bg-slate-100/80 p-1 rounded-2xl border border-slate-200/60 w-full max-w-xs">
-            {(['presencial', 'teletrabajo', 'cliente'] as const).map((type) => (
-              <button
-                key={type}
-                onClick={() => setWorkType(type)}
-                className={`flex-1 py-1.5 px-2 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center justify-center gap-1 ${
-                  workType === type
-                    ? 'bg-indigo-600 text-white shadow-xs'
-                    : 'text-slate-600 hover:text-slate-900'
-                }`}
-              >
-                <span>{type === 'presencial' ? '🏢' : type === 'teletrabajo' ? '🏠' : '🚗'}</span>
-                <span className="capitalize text-[11px]">
-                  {type === 'presencial' ? 'Oficina' : type === 'teletrabajo' ? 'Casa' : 'Ruta'}
+          {/* Quick Work Location Mode Selector - Filtered by Employee Allowed Configuration */}
+          {employeeAllowedLocations.length > 1 ? (
+            <div className="mb-3 flex justify-center gap-1.5 bg-slate-100/80 p-1 rounded-2xl border border-slate-200/60 w-full max-w-xs">
+              {employeeAllowedLocations.map((type) => (
+                <button
+                  key={type}
+                  type="button"
+                  onClick={() => setWorkType(type)}
+                  className={`flex-1 py-1.5 px-2 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center justify-center gap-1 ${
+                    workType === type
+                      ? 'bg-indigo-600 text-white shadow-xs'
+                      : 'text-slate-600 hover:text-slate-900'
+                  }`}
+                >
+                  <span>{type === 'presencial' ? '🏢' : type === 'teletrabajo' ? '🏠' : '🚗'}</span>
+                  <span className="capitalize text-[11px]">
+                    {type === 'presencial' ? 'Oficina' : type === 'teletrabajo' ? 'Casa' : 'Ruta'}
+                  </span>
+                </button>
+              ))}
+            </div>
+          ) : (
+            <div className="mb-3 flex justify-center w-full max-w-xs">
+              <div className="bg-slate-100/90 border border-slate-200/80 px-3.5 py-1.5 rounded-2xl flex items-center justify-center gap-2 text-xs font-bold text-slate-800 shadow-2xs w-full">
+                <span>
+                  {employeeAllowedLocations[0] === 'presencial'
+                    ? '🏢'
+                    : employeeAllowedLocations[0] === 'teletrabajo'
+                    ? '🏠'
+                    : '🚗'}
                 </span>
-              </button>
-            ))}
-          </div>
+                <span>
+                  Modalidad:{' '}
+                  <strong className="text-indigo-700">
+                    {employeeAllowedLocations[0] === 'presencial'
+                      ? 'Presencial (Oficina)'
+                      : employeeAllowedLocations[0] === 'teletrabajo'
+                      ? 'Casa (Teletrabajo)'
+                      : 'En Ruta'}
+                  </strong>
+                </span>
+              </div>
+            </div>
+          )}
 
           {/* Current Status Pill */}
           <div className="mb-2">

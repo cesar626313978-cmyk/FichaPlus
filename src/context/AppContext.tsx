@@ -132,6 +132,7 @@ interface AppContextType {
     adminName?: string;
     adminEmail?: string;
     adminDni?: string;
+    keepEmployees?: boolean;
   }) => Promise<void>;
   markNotificationRead: (id: string) => void;
   markAllNotificationsRead: () => void;
@@ -400,6 +401,16 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const [clockInTime, setClockInTime] = useState<string | null>(null);
   const [elapsedSeconds, setElapsedSeconds] = useState(0);
   const [workType, setWorkType] = useState<'presencial' | 'teletrabajo' | 'cliente'>('presencial');
+
+  // Keep workType synchronized with the employee's authorized modalities
+  useEffect(() => {
+    const rawAllowed = currentEmployee?.allowedWorkLocations;
+    if (Array.isArray(rawAllowed) && rawAllowed.length > 0) {
+      if (!rawAllowed.includes(workType)) {
+        setWorkType(rawAllowed[0]);
+      }
+    }
+  }, [currentEmployee?.allowedWorkLocations]);
 
   const isBetweenShifts =
     workdayPlan === 'partida' &&
@@ -1677,109 +1688,130 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     adminName?: string;
     adminEmail?: string;
     adminDni?: string;
+    keepEmployees?: boolean;
   }) => {
+    const keepEmployees = options?.keepEmployees === true;
     const nowIso = new Date().toISOString();
     const timestamp = new Date().toLocaleString('es-ES');
 
-    // 1. Reset Company Settings
-    const cleanCompany: CompanySettings = {
-      companyName: options?.companyName?.trim() || '',
-      fiscalId: options?.fiscalId?.trim() || '',
-      cccCode: '',
-      workplaceAddress: '',
-      workplaceCity: '',
-      collectiveAgreement: '',
-      annualHoursLimit: 1780,
-      overtimeYearlyLimit: 80,
-      intershiftRestHours: 12,
-      weeklyRestHours: 36,
-      paidPauseIncluded: true,
-      hourBankEnabled: true,
-      primaryColor: '#4f46e5',
-      logoUrl: '',
-      defaultLanguage: 'es',
-      defaultTimezone: 'Europe/Madrid',
-      dateFormat: 'DD/MM/YYYY',
-      baseWeeklyHours: 40,
-      strictClockIn: true,
-      defaultWorkDays: ['L', 'M', 'X', 'J', 'V', 'S'],
-      operatingHours: {
-        monFri: {
-          enabled: true,
-          type: 'continua',
-          cStart: '08:00',
-          cEnd: '16:00',
-          t1Start: '09:00',
-          t1End: '14:00',
-          t2Start: '16:00',
-          t2End: '19:00',
+    // 1. Reset / Update Company Settings
+    let cleanCompany: CompanySettings;
+    if (keepEmployees) {
+      cleanCompany = {
+        ...companySettings,
+        ...(options?.companyName?.trim() ? { companyName: options.companyName.trim() } : {}),
+        ...(options?.fiscalId?.trim() ? { fiscalId: options.fiscalId.trim() } : {}),
+      };
+    } else {
+      cleanCompany = {
+        companyName: options?.companyName?.trim() || '',
+        fiscalId: options?.fiscalId?.trim() || '',
+        cccCode: '',
+        workplaceAddress: '',
+        workplaceCity: '',
+        collectiveAgreement: '',
+        annualHoursLimit: 1780,
+        overtimeYearlyLimit: 80,
+        intershiftRestHours: 12,
+        weeklyRestHours: 36,
+        paidPauseIncluded: true,
+        hourBankEnabled: true,
+        primaryColor: '#4f46e5',
+        logoUrl: '',
+        defaultLanguage: 'es',
+        defaultTimezone: 'Europe/Madrid',
+        dateFormat: 'DD/MM/YYYY',
+        baseWeeklyHours: 40,
+        strictClockIn: true,
+        defaultWorkDays: ['L', 'M', 'X', 'J', 'V', 'S'],
+        operatingHours: {
+          monFri: {
+            enabled: true,
+            type: 'continua',
+            cStart: '08:00',
+            cEnd: '16:00',
+            t1Start: '09:00',
+            t1End: '14:00',
+            t2Start: '16:00',
+            t2End: '19:00',
+          },
+          saturday: {
+            enabled: true,
+            type: 'continua',
+            cStart: '09:00',
+            cEnd: '14:00',
+            t1Start: '09:00',
+            t1End: '14:00',
+            t2Start: '16:00',
+            t2End: '19:00',
+          },
+          sunday: {
+            enabled: false,
+            type: 'continua',
+            cStart: '09:00',
+            cEnd: '14:00',
+            t1Start: '09:00',
+            t1End: '14:00',
+            t2Start: '16:00',
+            t2End: '19:00',
+          },
         },
-        saturday: {
-          enabled: true,
-          type: 'continua',
-          cStart: '09:00',
-          cEnd: '14:00',
-          t1Start: '09:00',
-          t1End: '14:00',
-          t2Start: '16:00',
-          t2End: '19:00',
-        },
-        sunday: {
-          enabled: false,
-          type: 'continua',
-          cStart: '09:00',
-          cEnd: '14:00',
-          t1Start: '09:00',
-          t1End: '14:00',
-          t2Start: '16:00',
-          t2End: '19:00',
-        },
-      },
-    };
+      };
+    }
     setCompanySettings(cleanCompany);
     try {
       localStorage.setItem('fichaplus_company_settings', JSON.stringify(cleanCompany));
     } catch (e) {}
 
-    // 2. Reset Employees
-    let cleanEmployees: EmployeeRecord[] = [];
-    if (options?.keepAdmin !== false) {
-      cleanEmployees = [
-        {
-          id: 'emp-001',
-          employeeNumber: 'EMP-001',
-          fullName: options?.adminName?.trim() || profile.name || 'César Hernández Moreno',
-          dni: options?.adminDni?.trim() || profile.dni || '12345678X',
-          email: options?.adminEmail?.trim() || profile.email || 'cesar626313978@gmail.com',
-          phone: profile.phone || '+34 626 313 978',
-          department: 'Dirección & RRHH',
-          jobTitle: 'Responsable de Empresa',
-          contractType: 'Indefinido',
-          weeklyHours: 40,
-          status: 'ACTIVO',
-          avatarUrl: `https://api.dicebear.com/7.x/avataaars/svg?seed=${encodeURIComponent(
-            options?.adminName || profile.name || 'Admin'
-          )}`,
-          hasRotatingShifts: false,
-          shiftWeekA: 'Continua (08:00 - 16:00)',
-          shiftWeekB: 'Continua (08:00 - 16:00)',
-          joinedDate: nowIso.slice(0, 10),
-          pinCode: '1234',
-        },
-      ];
-    }
-    setEmployees(cleanEmployees);
-    localStorage.setItem('fichaplus_employees', JSON.stringify(cleanEmployees));
+    // 2. Employees Handling
+    let activeEmployeesList: EmployeeRecord[] = [];
+    if (keepEmployees) {
+      // PRESERVE ALL EMPLOYEES AND THEIR COMPLETE CHARACTERISTICS (shifts, modalities, PINs, vacations, etc.)
+      activeEmployeesList = [...employees];
+      setEmployees(activeEmployeesList);
+      try {
+        localStorage.setItem('fichaplus_employees', JSON.stringify(activeEmployeesList));
+      } catch (e) {}
+    } else {
+      // Complete wipe mode: only keep admin if requested
+      if (options?.keepAdmin !== false) {
+        activeEmployeesList = [
+          {
+            id: 'emp-001',
+            employeeNumber: 'EMP-001',
+            fullName: options?.adminName?.trim() || profile.name || 'César Hernández Moreno',
+            dni: options?.adminDni?.trim() || profile.dni || '12345678X',
+            email: options?.adminEmail?.trim() || profile.email || 'cesar626313978@gmail.com',
+            phone: profile.phone || '+34 626 313 978',
+            department: 'Dirección & RRHH',
+            jobTitle: 'Responsable de Empresa',
+            contractType: 'Indefinido',
+            weeklyHours: 40,
+            status: 'ACTIVO',
+            avatarUrl: `https://api.dicebear.com/7.x/avataaars/svg?seed=${encodeURIComponent(
+              options?.adminName || profile.name || 'Admin'
+            )}`,
+            hasRotatingShifts: false,
+            shiftWeekA: 'Continua (08:00 - 16:00)',
+            shiftWeekB: 'Continua (08:00 - 16:00)',
+            joinedDate: nowIso.slice(0, 10),
+            pinCode: '1234',
+          },
+        ];
+      }
+      setEmployees(activeEmployeesList);
+      localStorage.setItem('fichaplus_employees', JSON.stringify(activeEmployeesList));
 
-    // Mark all previous non-admin employee IDs as explicitly deleted
-    try {
-      const knownEmps = employees.map((e) => e.id).filter((id) => id !== 'emp-001' && id !== 'cesar-emp-01');
-      const dummyIds = ['emp-002', 'emp-003', 'emp-004', 'user-laura', 'user-carlos', 'user-maria', 'user-javier', 'user-ana', '4092', '88392', '3921'];
-      const allToPurge = Array.from(new Set([...knownEmps, ...dummyIds]));
-      localStorage.setItem('fichaplus_deleted_ids', JSON.stringify(allToPurge));
-      localStorage.setItem('fichaplus_is_reset', 'true');
-      localStorage.setItem('fichaplus_reset_time', nowIso);
-    } catch {}
+      // Mark all previous non-admin employee IDs as explicitly deleted only in wipeAll mode
+      try {
+        const knownEmps = employees.map((e) => e.id).filter((id) => id !== 'emp-001' && id !== 'cesar-emp-01');
+        const dummyIds = ['emp-002', 'emp-003', 'emp-004', 'user-laura', 'user-carlos', 'user-maria', 'user-javier', 'user-ana', '4092', '88392', '3921'];
+        const allToPurge = Array.from(new Set([...knownEmps, ...dummyIds]));
+        localStorage.setItem('fichaplus_deleted_ids', JSON.stringify(allToPurge));
+        localStorage.setItem('fichaplus_is_reset', 'true');
+        localStorage.setItem('fichaplus_reset_time', nowIso);
+      } catch {}
+    }
 
     // 3. Clear time entries, requests, incidents, and punch clock
     setTimeEntries([]);
@@ -1798,11 +1830,12 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     localStorage.removeItem('fichaplus_punch_state');
 
     // 4. Reset Monthly Record
+    const primaryEmployee = activeEmployeesList[0];
     const cleanMonthly: MonthlyRecord = {
       id: `monthly-${Date.now()}`,
-      userId: cleanEmployees[0]?.id || 'emp-001',
-      userName: cleanEmployees[0]?.fullName || profile.name || 'César Hernández Moreno',
-      userDni: cleanEmployees[0]?.dni || profile.dni || '12345678X',
+      userId: primaryEmployee?.id || 'emp-001',
+      userName: primaryEmployee?.fullName || profile.name || 'César Hernández Moreno',
+      userDni: primaryEmployee?.dni || profile.dni || '12345678X',
       month: new Date().toLocaleString('es-ES', { month: 'long', year: 'numeric' }),
       yearMonth: nowIso.slice(0, 7),
       ordinaryHours: 0,
@@ -1814,17 +1847,27 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     localStorage.setItem('fichaplus_monthly', JSON.stringify(cleanMonthly));
 
     // 5. Initial Audit Log
-    const hash = await generateSHA256(`PURGE_COMPANY_RESET_${nowIso}_${profile.name}`);
+    const hash = await generateSHA256(
+      keepEmployees
+        ? `TRIAL_RESET_KEEP_EMPLOYEES_${nowIso}_${profile.name}`
+        : `PURGE_COMPANY_RESET_${nowIso}_${profile.name}`
+    );
     const resetLog: AuditLog = {
       id: `audit-reset-${Date.now()}`,
       actionType: 'ELIMINACIÓN',
       performedBy: profile.name || 'Administrador Principal',
       performedByRole: 'Superadministrador',
       affectedUserId: 'ALL',
-      affectedUserName: 'Toda la Empresa',
-      previousValue: 'DATOS DE PRUEBA ANTERIORES',
-      newValue: `VACIADO TOTAL DEL SISTEMA - INICIO LIMPIO (${cleanCompany.companyName || 'Nueva Empresa'})`,
-      justification: 'Restablecimiento de fábrica solicitado con confirmación de código de seguridad para puesta en marcha real.',
+      affectedUserName: keepEmployees
+        ? `Plantilla completa (${activeEmployeesList.length} empleados conservados)`
+        : 'Toda la Empresa',
+      previousValue: keepEmployees ? 'DATOS DE PRUEBA DE JORNADA' : 'DATOS DE PRUEBA ANTERIORES',
+      newValue: keepEmployees
+        ? `PASO A PRODUCCIÓN: Puesta a 0 de fichajes y solicitudes. Conservados ${activeEmployeesList.length} empleados con sus turnos y características.`
+        : `VACIADO TOTAL DEL SISTEMA - INICIO LIMPIO (${cleanCompany.companyName || 'Nueva Empresa'})`,
+      justification: keepEmployees
+        ? 'Finalización de periodo de pruebas en la empresa. Se restablecen a cero los marcajes para iniciar el registro oficial manteniendo intacta la plantilla de empleados y sus horarios.'
+        : 'Restablecimiento de fábrica solicitado con confirmación de código de seguridad para puesta en marcha real.',
       timestamp,
       securityHash: hash,
     };
@@ -1834,8 +1877,12 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     // 6. Reset Notifications
     const resetNotif: AppNotification = {
       id: `notif-reset-${Date.now()}`,
-      title: 'Sistema Restablecido con Éxito',
-      message: 'Todos los datos de prueba han sido eliminados. Puedes dar de alta a tus empleados reales y personalizar los datos fiscales.',
+      title: keepEmployees
+        ? 'Período de Pruebas Restablecido con Éxito'
+        : 'Sistema Restablecido con Éxito',
+      message: keepEmployees
+        ? `Se han vaciado los fichajes, ausencias e incidencias de prueba para empezar de cero. Tu plantilla de ${activeEmployeesList.length} empleados, turnos y cupos de vacaciones se mantienen intactos para empezar el registro oficial.`
+        : 'Todos los datos de prueba han sido eliminados. Puedes dar de alta a tus empleados reales y personalizar los datos fiscales.',
       type: 'info',
       timestamp: 'Ahora',
       read: false,
@@ -1867,20 +1914,40 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       }
     } catch {}
     try {
-      const snapEmps = await safeFirestoreRead(getDocs(collection(db, 'employees')), 1000);
-      if (snapEmps && !snapEmps.empty) {
-        snapEmps.docs.forEach((d) => {
-          if (d.id !== 'emp-001' && d.id !== 'cesar-emp-01') {
-            safeFirestoreWrite(deleteDoc(doc(db, 'employees', d.id)), 300);
-          }
-        });
+      const snapAccess = await safeFirestoreRead(getDocs(collection(db, 'access_requests')), 1000);
+      if (snapAccess && !snapAccess.empty) {
+        snapAccess.docs.forEach((d) => safeFirestoreWrite(deleteDoc(doc(db, 'access_requests', d.id)), 300));
       }
     } catch {}
+
+    if (!keepEmployees) {
+      try {
+        const snapEmps = await safeFirestoreRead(getDocs(collection(db, 'employees')), 1000);
+        if (snapEmps && !snapEmps.empty) {
+          snapEmps.docs.forEach((d) => {
+            if (d.id !== 'emp-001' && d.id !== 'cesar-emp-01') {
+              safeFirestoreWrite(deleteDoc(doc(db, 'employees', d.id)), 300);
+            }
+          });
+        }
+      } catch {}
+      try {
+        if (activeEmployeesList[0]) {
+          safeFirestoreWrite(setDoc(doc(db, 'employees', 'emp-001'), activeEmployeesList[0]), 500);
+        }
+      } catch {}
+    } else {
+      // In keepEmployees mode: persist all current employees in Firestore
+      try {
+        activeEmployeesList.forEach((emp) => {
+          safeFirestoreWrite(setDoc(doc(db, 'employees', emp.id), emp), 300);
+        });
+      } catch {}
+    }
+
     try {
-      if (cleanEmployees[0]) {
-        safeFirestoreWrite(setDoc(doc(db, 'employees', 'emp-001'), cleanEmployees[0]), 500);
-      }
       safeFirestoreWrite(setDoc(doc(db, 'audit_logs', resetLog.id), resetLog), 500);
+      safeFirestoreWrite(setDoc(doc(db, 'company_settings', 'active_company'), cleanCompany), 500);
     } catch {}
   };
 

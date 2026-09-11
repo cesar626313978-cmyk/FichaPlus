@@ -5,7 +5,7 @@ import { CompanyOperatingHours, DayScheduleConfig } from '../types';
 import { formatMinutesToHours, calculateMinutesBetween } from '../utils/shiftUtils';
 
 export const CompanySettingsView: React.FC = () => {
-  const { companySettings, updateCompanySettings, resetAllCompanyData, setActiveTab: setAppTab } = useApp();
+  const { companySettings, updateCompanySettings, resetAllCompanyData, setActiveTab: setAppTab, employees } = useApp();
   const { profile, updateProfileData } = useAuth();
   const [activeTab, setActiveTab] = useState<'empresa' | 'notificaciones' | 'reset'>('empresa');
 
@@ -158,7 +158,8 @@ export const CompanySettingsView: React.FC = () => {
 
   // Reset Modal & Security State
   const [isResetModalOpen, setIsResetModalOpen] = useState(false);
-  const [securityCode, setSecurityCode] = useState('RESET-7842');
+  const [resetMode, setResetMode] = useState<'keepEmployees' | 'wipeAll'>('keepEmployees');
+  const [securityCode, setSecurityCode] = useState('INICIAR-7842');
   const [inputCode, setInputCode] = useState('');
   const [newCompanyName, setNewCompanyName] = useState('');
   const [newFiscalId, setNewFiscalId] = useState('');
@@ -173,16 +174,24 @@ export const CompanySettingsView: React.FC = () => {
   const [notifRequests, setNotifRequests] = useState(true);
   const [notifSystem, setNotifSystem] = useState(true);
 
-  const openResetModal = () => {
+  const openResetModal = (mode: 'keepEmployees' | 'wipeAll' = 'keepEmployees') => {
+    setResetMode(mode);
     const randomDigits = Math.floor(1000 + Math.random() * 9000);
-    setSecurityCode(`BORRAR-${randomDigits}`);
+    setSecurityCode(mode === 'keepEmployees' ? `INICIAR-${randomDigits}` : `BORRAR-${randomDigits}`);
     setInputCode('');
-    setNewCompanyName('');
-    setNewFiscalId('');
+    setNewCompanyName(companySettings.companyName || '');
+    setNewFiscalId(companySettings.fiscalId || '');
     setAdminName(profile.name);
     setAdminEmail(profile.email);
     setAdminDni(profile.dni);
     setIsResetModalOpen(true);
+  };
+
+  const switchResetMode = (mode: 'keepEmployees' | 'wipeAll') => {
+    setResetMode(mode);
+    const randomDigits = Math.floor(1000 + Math.random() * 9000);
+    setSecurityCode(mode === 'keepEmployees' ? `INICIAR-${randomDigits}` : `BORRAR-${randomDigits}`);
+    setInputCode('');
   };
 
   const handleExecuteReset = async (e: React.FormEvent) => {
@@ -191,12 +200,13 @@ export const CompanySettingsView: React.FC = () => {
 
     setIsResetting(true);
     await resetAllCompanyData({
-      companyName: newCompanyName.trim(),
-      fiscalId: newFiscalId.trim(),
+      companyName: newCompanyName.trim() || companySettings.companyName,
+      fiscalId: newFiscalId.trim() || companySettings.fiscalId,
       keepAdmin: true,
       adminName: adminName.trim(),
       adminEmail: adminEmail.trim(),
       adminDni: adminDni.trim(),
+      keepEmployees: resetMode === 'keepEmployees',
     });
 
     if (adminName.trim() || adminDni.trim()) {
@@ -207,19 +217,25 @@ export const CompanySettingsView: React.FC = () => {
       });
     }
 
-    setName(newCompanyName.trim());
-    setFiscalId(newFiscalId.trim());
-    setCccCode('');
-    setWorkplaceAddress('');
-    setWorkplaceCity('');
+    if (resetMode === 'wipeAll') {
+      setName(newCompanyName.trim());
+      setFiscalId(newFiscalId.trim());
+      setCccCode('');
+      setWorkplaceAddress('');
+      setWorkplaceCity('');
+    } else if (newCompanyName.trim()) {
+      setName(newCompanyName.trim());
+      if (newFiscalId.trim()) setFiscalId(newFiscalId.trim());
+    }
+
     setIsResetting(false);
     setResetSuccess(true);
 
     setTimeout(() => {
       setResetSuccess(false);
       setIsResetModalOpen(false);
-      setAppTab('employees');
-    }, 2200);
+      setAppTab('dashboard');
+    }, 2400);
   };
 
   const handleSaveCompany = async (e: React.FormEvent) => {
@@ -948,37 +964,56 @@ export const CompanySettingsView: React.FC = () => {
 
             <button
               type="button"
-              onClick={openResetModal}
-              className="bg-rose-50 hover:bg-rose-100 text-rose-700 border-2 border-rose-200 py-4 px-6 rounded-2xl font-black text-xs uppercase tracking-wider transition-all cursor-pointer flex items-center justify-center gap-2"
+              onClick={() => openResetModal('keepEmployees')}
+              className="bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border-2 border-emerald-200 py-4 px-6 rounded-2xl font-black text-xs uppercase tracking-wider transition-all cursor-pointer flex items-center justify-center gap-2 shadow-xs"
             >
-              <span className="material-symbols-outlined text-base text-rose-600">restart_alt</span>
-              <span>Restablecer Datos</span>
+              <span className="material-symbols-outlined text-base text-emerald-700">rocket_launch</span>
+              <span>Restablecer Datos de Prueba</span>
             </button>
           </div>
 
-          {/* Danger Zone banner at bottom of main tab */}
-          <div className="bg-rose-50/70 border-2 border-rose-200 rounded-3xl p-6 flex flex-col sm:flex-row items-center justify-between gap-4">
-            <div className="flex items-center gap-3.5 text-rose-950 text-left">
-              <div className="w-12 h-12 rounded-2xl bg-rose-100 text-rose-600 flex items-center justify-center shrink-0">
-                <span className="material-symbols-outlined text-2xl font-black">delete_forever</span>
+          {/* Trial Reset / Production Ready Banner at bottom of main tab */}
+          <div className="bg-gradient-to-r from-emerald-50/90 via-teal-50/70 to-indigo-50/70 border-2 border-emerald-200/90 rounded-3xl p-6 flex flex-col lg:flex-row items-center justify-between gap-5 shadow-sm">
+            <div className="flex items-start sm:items-center gap-4 text-slate-900 text-left">
+              <div className="w-13 h-13 rounded-2xl bg-emerald-600 text-white flex items-center justify-center shrink-0 shadow-md shadow-emerald-200">
+                <span className="material-symbols-outlined text-2xl font-black">rocket_launch</span>
               </div>
               <div>
-                <h3 className="font-black text-sm text-rose-950 uppercase tracking-wide">
-                  ¿Quieres borrar los datos de prueba y empezar de cero?
+                <div className="flex items-center gap-2">
+                  <span className="bg-emerald-100 text-emerald-800 text-[10px] font-black uppercase tracking-wider px-2.5 py-0.5 rounded-full border border-emerald-300">
+                    Paso a Producción
+                  </span>
+                  <span className="text-[11px] font-bold text-slate-500">
+                    {employees.length} empleados en plantilla
+                  </span>
+                </div>
+                <h3 className="font-black text-sm text-slate-900 uppercase tracking-wide mt-1">
+                  ¿Has terminado el periodo de pruebas en tu empresa?
                 </h3>
-                <p className="text-xs text-rose-700 mt-0.5">
-                  Elimina todos los fichajes ficticios y configura el nombre real y CIF de tu empresa.
+                <p className="text-xs text-slate-600 mt-0.5 leading-relaxed max-w-2xl">
+                  Elimina todos los fichajes ficticios, pausas e incidencias para empezar de cero, <strong>conservando a todos los empleados, sus turnos, modalidades de trabajo (oficina/casa/ruta) y cupos de vacaciones</strong>.
                 </p>
               </div>
             </div>
-            <button
-              type="button"
-              onClick={openResetModal}
-              className="bg-rose-600 hover:bg-rose-700 text-white font-black text-xs uppercase tracking-wider py-3 px-5 rounded-2xl shadow-sm transition-all shrink-0 cursor-pointer flex items-center gap-1.5"
-            >
-              <span className="material-symbols-outlined text-base">restart_alt</span>
-              <span>Restablecer Ahora</span>
-            </button>
+            <div className="flex flex-col sm:flex-row items-center gap-2.5 w-full lg:w-auto shrink-0">
+              <button
+                type="button"
+                onClick={() => openResetModal('keepEmployees')}
+                className="w-full sm:w-auto bg-emerald-600 hover:bg-emerald-700 text-white font-black text-xs uppercase tracking-wider py-3.5 px-5 rounded-2xl shadow-md shadow-emerald-200 hover:shadow-lg transition-all cursor-pointer flex items-center justify-center gap-2"
+              >
+                <span className="material-symbols-outlined text-base">restart_alt</span>
+                <span>Restablecer Pruebas (Conservar Empleados)</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => openResetModal('wipeAll')}
+                className="w-full sm:w-auto text-slate-400 hover:text-rose-600 hover:bg-rose-50 text-[11px] font-bold py-2.5 px-3 rounded-xl transition-all cursor-pointer flex items-center justify-center gap-1"
+                title="Borrar también todos los empleados y volver al estado inicial de fábrica"
+              >
+                <span className="material-symbols-outlined text-sm">delete_sweep</span>
+                <span>Borrado de fábrica</span>
+              </button>
+            </div>
           </div>
         </form>
       )}
@@ -1059,56 +1094,131 @@ export const CompanySettingsView: React.FC = () => {
         </div>
       )}
 
-      {/* TAB 3: Restablecer Datos de la Empresa (Zona Crítica) */}
+      {/* TAB 3: Restablecer Datos de la Empresa */}
       {activeTab === 'reset' && (
         <div className="space-y-6">
-          <section className="bg-rose-50/60 rounded-3xl p-6 sm:p-8 border-2 border-rose-200 space-y-5">
+          {/* Option 1: Trial Reset - Preserve Employees (Recommended) */}
+          <section className="bg-gradient-to-br from-emerald-50/80 via-teal-50/60 to-white rounded-3xl p-6 sm:p-8 border-2 border-emerald-200 shadow-sm space-y-5">
+            <div className="flex items-start sm:items-center justify-between gap-4 flex-wrap">
+              <div className="flex items-center gap-3.5 text-emerald-950">
+                <div className="w-12 h-12 rounded-2xl bg-emerald-600 text-white flex items-center justify-center font-bold shadow-md shadow-emerald-200">
+                  <span className="material-symbols-outlined text-2xl font-black">rocket_launch</span>
+                </div>
+                <div>
+                  <div className="flex items-center gap-2">
+                    <span className="bg-emerald-100 text-emerald-800 text-[10px] font-black uppercase tracking-wider px-2.5 py-0.5 rounded-full border border-emerald-300">
+                      Recomendada tras período de pruebas
+                    </span>
+                    <span className="text-xs font-bold text-emerald-700">
+                      {employees.length} empleados registrados
+                    </span>
+                  </div>
+                  <h2 className="font-black text-xl text-slate-900 mt-0.5">
+                    Paso a Producción: Conservar Empleados
+                  </h2>
+                  <p className="text-xs text-slate-600 mt-0.5">
+                    Reinicia a cero todos los marcajes, horas e incidencias de prueba para empezar de forma oficial, manteniendo la plantilla intacta.
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            <div className="bg-white rounded-2xl p-5 border border-emerald-100 space-y-3 text-xs text-slate-700 shadow-xs">
+              <h3 className="font-black text-sm text-slate-900 flex items-center gap-2">
+                <span className="material-symbols-outlined text-base text-emerald-600">verified_user</span>
+                <span>¿Cómo funciona esta restauración para el inicio oficial?</span>
+              </h3>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-1">
+                <div className="space-y-2 bg-emerald-50/50 p-3.5 rounded-xl border border-emerald-100">
+                  <span className="font-black text-[11px] uppercase tracking-wider text-emerald-800 block">
+                    🛡️ Se conservan intactos:
+                  </span>
+                  <ul className="space-y-1.5 text-slate-700 text-[11px]">
+                    <li className="flex items-start gap-1.5">
+                      <span className="text-emerald-600 font-bold">✓</span>
+                      <span><strong>Los {employees.length} empleados</strong> (Nombres, DNI, Email, Teléfono, PINs).</span>
+                    </li>
+                    <li className="flex items-start gap-1.5">
+                      <span className="text-emerald-600 font-bold">✓</span>
+                      <span><strong>Turnos y horarios</strong> (Semana A, Semana B, turnos de sábados).</span>
+                    </li>
+                    <li className="flex items-start gap-1.5">
+                      <span className="text-emerald-600 font-bold">✓</span>
+                      <span><strong>Modalidad de fichaje</strong> (Presencial Oficina, Casa, Ruta).</span>
+                    </li>
+                    <li className="flex items-start gap-1.5">
+                      <span className="text-emerald-600 font-bold">✓</span>
+                      <span><strong>Cupos de vacaciones</strong> y parámetros de empresa configurados.</span>
+                    </li>
+                  </ul>
+                </div>
+
+                <div className="space-y-2 bg-rose-50/50 p-3.5 rounded-xl border border-rose-100">
+                  <span className="font-black text-[11px] uppercase tracking-wider text-rose-800 block">
+                    🧹 Se restablece a cero (Puesta a 0):
+                  </span>
+                  <ul className="space-y-1.5 text-slate-700 text-[11px]">
+                    <li className="flex items-start gap-1.5">
+                      <span className="text-rose-500 font-bold">✕</span>
+                      <span>Todos los <strong>fichajes y horas de prueba</strong> registradas.</span>
+                    </li>
+                    <li className="flex items-start gap-1.5">
+                      <span className="text-rose-500 font-bold">✕</span>
+                      <span>Pausas de comida, descansos y salidas temporales ficticias.</span>
+                    </li>
+                    <li className="flex items-start gap-1.5">
+                      <span className="text-rose-500 font-bold">✕</span>
+                      <span>Solicitudes de vacaciones e incidencias creadas en el test.</span>
+                    </li>
+                    <li className="flex items-start gap-1.5">
+                      <span className="text-rose-500 font-bold">✕</span>
+                      <span>Informes mensuales y firmas anteriores de prueba.</span>
+                    </li>
+                  </ul>
+                </div>
+              </div>
+            </div>
+
+            <div className="pt-2">
+              <button
+                type="button"
+                onClick={() => openResetModal('keepEmployees')}
+                className="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-black text-sm uppercase tracking-wider py-4 px-6 rounded-2xl shadow-lg shadow-emerald-200 hover:shadow-xl transition-all flex items-center justify-center gap-2 cursor-pointer"
+              >
+                <span className="material-symbols-outlined text-xl">rocket_launch</span>
+                <span>Restablecer Pruebas y Conservar Empleados</span>
+              </button>
+            </div>
+          </section>
+
+          {/* Option 2: Total Factory Wipe */}
+          <section className="bg-rose-50/60 rounded-3xl p-6 sm:p-8 border-2 border-rose-200 space-y-4">
             <div className="flex items-center gap-3 text-rose-900">
               <div className="w-12 h-12 rounded-2xl bg-rose-100 text-rose-600 flex items-center justify-center font-bold">
                 <span className="material-symbols-outlined text-2xl font-black">warning</span>
               </div>
               <div>
                 <h2 className="font-black text-xl text-rose-950">
-                  Zona Crítica: Restablecimiento de Fábrica
+                  Zona Crítica: Restablecimiento Total de Fábrica
                 </h2>
                 <p className="text-xs text-rose-700 mt-0.5">
-                  Elimina todos los datos de demostración y empieza desde cero con los datos de tu empresa.
+                  Acción irreversible: borra absolutamente todos los datos incluyendo a los empleados de la empresa.
                 </p>
               </div>
             </div>
 
-            <div className="bg-white rounded-2xl p-5 border border-rose-100 space-y-3 text-xs text-slate-700">
-              <h3 className="font-black text-sm text-slate-900">
-                ¿Qué sucederá al restablecer la aplicación?
-              </h3>
-              <ul className="space-y-2">
-                <li className="flex items-center gap-2 text-rose-700">
-                  <span className="material-symbols-outlined text-base text-rose-500">cancel</span>
-                  <span>Se eliminarán todos los <strong>fichajes y registros de jornada</strong> de prueba.</span>
-                </li>
-                <li className="flex items-center gap-2 text-rose-700">
-                  <span className="material-symbols-outlined text-base text-rose-500">cancel</span>
-                  <span>Se cancelarán todas las <strong>solicitudes de vacaciones</strong> y peticiones de subsanación.</span>
-                </li>
-                <li className="flex items-center gap-2 text-rose-700">
-                  <span className="material-symbols-outlined text-base text-rose-500">cancel</span>
-                  <span>Se borrarán los <strong>empleados de prueba</strong> para que puedas registrar a tu plantilla real.</span>
-                </li>
-                <li className="flex items-center gap-2 text-emerald-700">
-                  <span className="material-symbols-outlined text-base text-emerald-500">check_circle</span>
-                  <span>Podrás introducir inmediatamente el <strong>nombre real de tu empresa, CIF y tu usuario Administrador</strong>.</span>
-                </li>
-              </ul>
-            </div>
+            <p className="text-xs text-slate-600 leading-relaxed">
+              Usa esta opción si deseas transferir la cuenta a otra empresa o vaciar completamente la plantilla para empezar desde una instalación limpia con solo un usuario administrador.
+            </p>
 
             <div className="pt-2">
               <button
                 type="button"
-                onClick={openResetModal}
-                className="w-full bg-rose-600 hover:bg-rose-700 text-white font-black text-sm uppercase tracking-wider py-4 px-6 rounded-2xl shadow-lg shadow-rose-200 hover:shadow-xl transition-all flex items-center justify-center gap-2 cursor-pointer"
+                onClick={() => openResetModal('wipeAll')}
+                className="w-full bg-rose-600 hover:bg-rose-700 text-white font-black text-xs uppercase tracking-wider py-3.5 px-6 rounded-2xl shadow-sm transition-all flex items-center justify-center gap-2 cursor-pointer"
               >
-                <span className="material-symbols-outlined text-xl">delete_forever</span>
-                <span>Restablecer Todos los Datos y Comenzar de Cero</span>
+                <span className="material-symbols-outlined text-base">delete_forever</span>
+                <span>Restablecimiento de Fábrica Completo (Borrar Empleados)</span>
               </button>
             </div>
           </section>
@@ -1118,19 +1228,33 @@ export const CompanySettingsView: React.FC = () => {
       {/* High Security Reset Modal */}
       {isResetModalOpen && (
         <div className="fixed inset-0 z-50 bg-slate-900/70 backdrop-blur-xs flex items-center justify-center p-4 overflow-y-auto">
-          <div className="bg-white rounded-3xl shadow-2xl border-2 border-rose-300 max-w-lg w-full p-6 sm:p-8 my-8 max-h-[90vh] overflow-y-auto">
+          <div className={`bg-white rounded-3xl shadow-2xl border-2 ${
+            resetMode === 'keepEmployees' ? 'border-emerald-300' : 'border-rose-300'
+          } max-w-lg w-full p-6 sm:p-8 my-8 max-h-[90vh] overflow-y-auto`}>
             {/* Modal Header */}
             <div className="flex items-start justify-between pb-4 border-b border-slate-100">
               <div className="flex items-center gap-3">
-                <div className="w-12 h-12 rounded-2xl bg-rose-50 text-rose-600 flex items-center justify-center font-bold">
-                  <span className="material-symbols-outlined text-2xl font-black">shield_lock</span>
+                <div className={`w-12 h-12 rounded-2xl ${
+                  resetMode === 'keepEmployees'
+                    ? 'bg-emerald-50 text-emerald-600'
+                    : 'bg-rose-50 text-rose-600'
+                } flex items-center justify-center font-bold`}>
+                  <span className="material-symbols-outlined text-2xl font-black">
+                    {resetMode === 'keepEmployees' ? 'rocket_launch' : 'shield_lock'}
+                  </span>
                 </div>
                 <div>
                   <h2 className="font-black text-xl text-slate-900 leading-tight">
-                    Confirmación de Seguridad
+                    {resetMode === 'keepEmployees'
+                      ? 'Fin del Período de Pruebas'
+                      : 'Confirmación de Seguridad'}
                   </h2>
-                  <p className="text-xs text-rose-600 font-bold mt-0.5">
-                    Acción destructiva irreversible
+                  <p className={`text-xs font-bold mt-0.5 ${
+                    resetMode === 'keepEmployees' ? 'text-emerald-700' : 'text-rose-600'
+                  }`}>
+                    {resetMode === 'keepEmployees'
+                      ? 'Paso a producción conservando los empleados'
+                      : 'Acción destructiva total irreversible'}
                   </p>
                 </div>
               </div>
@@ -1142,39 +1266,98 @@ export const CompanySettingsView: React.FC = () => {
               </button>
             </div>
 
+            {/* Mode Switcher Tabs */}
+            <div className="grid grid-cols-2 gap-1.5 p-1.5 bg-slate-100 rounded-2xl mt-4">
+              <button
+                type="button"
+                onClick={() => switchResetMode('keepEmployees')}
+                className={`py-2 px-3 rounded-xl text-xs font-black transition-all cursor-pointer flex items-center justify-center gap-1.5 ${
+                  resetMode === 'keepEmployees'
+                    ? 'bg-white text-emerald-800 shadow-sm'
+                    : 'text-slate-600 hover:text-slate-900'
+                }`}
+              >
+                <span className="material-symbols-outlined text-sm text-emerald-600">rocket_launch</span>
+                <span>Conservar Empleados</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => switchResetMode('wipeAll')}
+                className={`py-2 px-3 rounded-xl text-xs font-black transition-all cursor-pointer flex items-center justify-center gap-1.5 ${
+                  resetMode === 'wipeAll'
+                    ? 'bg-white text-rose-800 shadow-sm'
+                    : 'text-slate-600 hover:text-slate-900'
+                }`}
+              >
+                <span className="material-symbols-outlined text-sm text-rose-600">delete_sweep</span>
+                <span>Borrado Total</span>
+              </button>
+            </div>
+
             {resetSuccess ? (
               <div className="py-12 text-center space-y-3">
                 <div className="w-16 h-16 bg-emerald-100 text-emerald-600 rounded-full flex items-center justify-center mx-auto mb-2 animate-bounce">
-                  <span className="material-symbols-outlined text-4xl">check</span>
+                  <span className="material-symbols-outlined text-4xl">
+                    {resetMode === 'keepEmployees' ? 'rocket_launch' : 'check'}
+                  </span>
                 </div>
-                <h3 className="font-black text-2xl text-slate-900">¡Restablecimiento Completado!</h3>
-                <p className="text-xs text-slate-500 max-w-xs mx-auto">
-                  La base de datos está limpia. Redirigiéndote al módulo de empleados para dar de alta a tu equipo real...
+                <h3 className="font-black text-2xl text-slate-900">
+                  {resetMode === 'keepEmployees'
+                    ? '¡Paso a Producción Completado!'
+                    : '¡Restablecimiento Completado!'}
+                </h3>
+                <p className="text-xs text-slate-500 max-w-xs mx-auto leading-relaxed">
+                  {resetMode === 'keepEmployees'
+                    ? `Fichajes y registros de prueba puestos a cero. Tus ${employees.length} empleados, turnos y modalidades se han mantenido intactos para comenzar el registro oficial.`
+                    : 'La base de datos está limpia. Redirigiéndote al módulo principal...'}
                 </p>
               </div>
             ) : (
               <form onSubmit={handleExecuteReset} className="space-y-4 pt-4">
-                <p className="text-xs text-slate-600">
-                  Para evitar borrados accidentales, introduce los datos de tu nueva empresa y escribe el código de seguridad que ves a continuación:
-                </p>
+                {/* Descriptive banner according to mode */}
+                {resetMode === 'keepEmployees' ? (
+                  <div className="bg-emerald-50 border border-emerald-200 p-4 rounded-2xl space-y-2">
+                    <div className="flex items-center gap-2 text-emerald-900 font-black text-xs uppercase tracking-wide">
+                      <span className="material-symbols-outlined text-base text-emerald-600">verified</span>
+                      <span>Plantilla asegurada: {employees.length} empleados</span>
+                    </div>
+                    <p className="text-[11px] text-emerald-800 leading-relaxed">
+                      Se vacían todos los fichajes, pausas e incidencias de prueba. <strong>Se mantienen al 100% todos los empleados</strong> con sus turnos (Semana A/B, sábados), modalidad de trabajo (oficina/casa/ruta), PINs y cupos de vacaciones.
+                    </p>
+                  </div>
+                ) : (
+                  <div className="bg-rose-50 border border-rose-200 p-4 rounded-2xl space-y-2">
+                    <div className="flex items-center gap-2 text-rose-900 font-black text-xs uppercase tracking-wide">
+                      <span className="material-symbols-outlined text-base text-rose-600">warning</span>
+                      <span>Atención: Vaciado completo</span>
+                    </div>
+                    <p className="text-[11px] text-rose-800 leading-relaxed">
+                      Esta acción eliminará todos los empleados y registros. La base de datos volverá a su estado virgen con solo el administrador principal.
+                    </p>
+                  </div>
+                )}
 
-                {/* Form fields for clean start */}
+                {/* Form fields */}
                 <div className="space-y-3 bg-slate-50 p-4 rounded-2xl border border-slate-200">
                   <h4 className="font-black text-xs uppercase tracking-wider text-slate-800">
-                    Datos de la Nueva Empresa
+                    {resetMode === 'keepEmployees'
+                      ? 'Datos de la Empresa (Confirmar o Actualizar)'
+                      : 'Datos de la Nueva Empresa'}
                   </h4>
 
                   <div>
                     <label className="text-[11px] font-bold uppercase text-slate-500 block mb-1">
-                      Nombre Real de la Empresa *
+                      Nombre de la Empresa *
                     </label>
                     <input
                       type="text"
                       required
                       value={newCompanyName}
                       onChange={(e) => setNewCompanyName(e.target.value)}
-                      placeholder="Ej: Grupo García & Asociados S.L."
-                      className="w-full bg-white border border-slate-300 p-2.5 rounded-xl font-bold text-xs text-slate-900 focus:outline-none focus:ring-2 focus:ring-rose-500"
+                      placeholder="Ej: Mi Empresa S.L."
+                      className={`w-full bg-white border border-slate-300 p-2.5 rounded-xl font-bold text-xs text-slate-900 focus:outline-none focus:ring-2 ${
+                        resetMode === 'keepEmployees' ? 'focus:ring-emerald-500' : 'focus:ring-rose-500'
+                      }`}
                     />
                   </div>
 
@@ -1187,33 +1370,63 @@ export const CompanySettingsView: React.FC = () => {
                       value={newFiscalId}
                       onChange={(e) => setNewFiscalId(e.target.value)}
                       placeholder="B-98765432"
-                      className="w-full bg-white border border-slate-300 p-2.5 rounded-xl font-mono font-bold text-xs text-slate-900 focus:outline-none focus:ring-2 focus:ring-rose-500"
+                      className={`w-full bg-white border border-slate-300 p-2.5 rounded-xl font-mono font-bold text-xs text-slate-900 focus:outline-none focus:ring-2 ${
+                        resetMode === 'keepEmployees' ? 'focus:ring-emerald-500' : 'focus:ring-rose-500'
+                      }`}
                     />
                   </div>
 
-                  <div className="pt-1 border-t border-slate-200">
-                    <label className="text-[11px] font-bold uppercase text-slate-500 block mb-1">
-                      Nombre del Administrador Principal
-                    </label>
-                    <input
-                      type="text"
-                      value={adminName}
-                      onChange={(e) => setAdminName(e.target.value)}
-                      className="w-full bg-white border border-slate-300 p-2.5 rounded-xl font-semibold text-xs text-slate-900 focus:outline-none focus:ring-2 focus:ring-rose-500"
-                    />
-                  </div>
+                  {resetMode === 'wipeAll' && (
+                    <div className="pt-1 border-t border-slate-200">
+                      <label className="text-[11px] font-bold uppercase text-slate-500 block mb-1">
+                        Nombre del Administrador Principal
+                      </label>
+                      <input
+                        type="text"
+                        value={adminName}
+                        onChange={(e) => setAdminName(e.target.value)}
+                        className="w-full bg-white border border-slate-300 p-2.5 rounded-xl font-semibold text-xs text-slate-900 focus:outline-none focus:ring-2 focus:ring-rose-500"
+                      />
+                    </div>
+                  )}
                 </div>
 
                 {/* Security Code Verification Box */}
-                <div className="bg-rose-50 border-2 border-rose-200 p-4 rounded-2xl text-center space-y-2">
-                  <span className="text-[11px] font-bold uppercase tracking-wider text-rose-800 block">
+                <div className={`border-2 p-4 rounded-2xl text-center space-y-2 ${
+                  resetMode === 'keepEmployees'
+                    ? 'bg-emerald-50 border-emerald-200'
+                    : 'bg-rose-50 border-rose-200'
+                }`}>
+                  <span className={`text-[11px] font-bold uppercase tracking-wider block ${
+                    resetMode === 'keepEmployees' ? 'text-emerald-800' : 'text-rose-800'
+                  }`}>
                     Código de Seguridad Requerido:
                   </span>
-                  <div className="inline-block bg-white px-4 py-2 rounded-xl border-2 border-rose-300 font-mono font-black text-xl tracking-widest text-rose-600 shadow-inner select-all">
-                    {securityCode}
+                  <div className="flex items-center justify-center gap-2">
+                    <div className={`inline-block bg-white px-4 py-2 rounded-xl border-2 font-mono font-black text-xl tracking-widest shadow-inner select-all ${
+                      resetMode === 'keepEmployees'
+                        ? 'border-emerald-300 text-emerald-700'
+                        : 'border-rose-300 text-rose-600'
+                    }`}>
+                      {securityCode}
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setInputCode(securityCode)}
+                      className={`text-[11px] font-bold py-1.5 px-2.5 rounded-lg border transition-all cursor-pointer ${
+                        resetMode === 'keepEmployees'
+                          ? 'bg-white border-emerald-300 text-emerald-700 hover:bg-emerald-100'
+                          : 'bg-white border-rose-300 text-rose-700 hover:bg-rose-100'
+                      }`}
+                      title="Autorrellenar código de seguridad"
+                    >
+                      Copiar
+                    </button>
                   </div>
-                  <p className="text-[10px] text-rose-700">
-                    Escribe el código tal como aparece arriba para habilitar el botón de vaciado.
+                  <p className={`text-[10px] ${
+                    resetMode === 'keepEmployees' ? 'text-emerald-700' : 'text-rose-700'
+                  }`}>
+                    Escribe el código tal como aparece arriba para habilitar la confirmación.
                   </p>
 
                   <input
@@ -1222,7 +1435,11 @@ export const CompanySettingsView: React.FC = () => {
                     value={inputCode}
                     onChange={(e) => setInputCode(e.target.value.toUpperCase())}
                     placeholder={`Escribe ${securityCode}`}
-                    className="w-full bg-white border-2 border-rose-300 p-3 rounded-xl font-mono font-black text-center text-sm uppercase text-slate-900 focus:outline-none focus:ring-2 focus:ring-rose-500"
+                    className={`w-full bg-white border-2 p-3 rounded-xl font-mono font-black text-center text-sm uppercase text-slate-900 focus:outline-none focus:ring-2 ${
+                      resetMode === 'keepEmployees'
+                        ? 'border-emerald-300 focus:ring-emerald-500'
+                        : 'border-rose-300 focus:ring-rose-500'
+                    }`}
                   />
                 </div>
 
@@ -1241,18 +1458,26 @@ export const CompanySettingsView: React.FC = () => {
                     disabled={inputCode.trim() !== securityCode || !newCompanyName.trim() || isResetting}
                     className={`flex-2 py-3.5 px-4 rounded-2xl font-black text-xs uppercase tracking-wider transition-all flex items-center justify-center gap-1.5 cursor-pointer ${
                       inputCode.trim() === securityCode && newCompanyName.trim() && !isResetting
-                        ? 'bg-rose-600 hover:bg-rose-700 text-white shadow-lg shadow-rose-200'
+                        ? resetMode === 'keepEmployees'
+                          ? 'bg-emerald-600 hover:bg-emerald-700 text-white shadow-lg shadow-emerald-200'
+                          : 'bg-rose-600 hover:bg-rose-700 text-white shadow-lg shadow-rose-200'
                         : 'bg-slate-200 text-slate-400 cursor-not-allowed'
                     }`}
                   >
                     <span className="material-symbols-outlined text-base">
-                      {isResetting ? 'hourglass_top' : 'delete_forever'}
+                      {isResetting
+                        ? 'hourglass_top'
+                        : resetMode === 'keepEmployees'
+                        ? 'rocket_launch'
+                        : 'delete_forever'}
                     </span>
                     <span>
                       {isResetting
-                        ? 'Vaciando Datos...'
+                        ? 'Restableciendo Datos...'
                         : inputCode.trim() !== securityCode
                         ? 'Introduce el Código'
+                        : resetMode === 'keepEmployees'
+                        ? 'Confirmar (Conservar Empleados)'
                         : 'Confirmar y Vaciar Todo'}
                     </span>
                   </button>

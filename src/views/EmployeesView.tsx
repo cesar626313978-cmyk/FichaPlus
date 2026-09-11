@@ -1,7 +1,7 @@
 import React, { useState, useMemo } from 'react';
 import { useApp } from '../context/AppContext';
 import { useAuth } from '../context/AuthContext';
-import { EmployeeRecord, SaturdayPlanType } from '../types';
+import { EmployeeRecord, SaturdayPlanType, AllowedWorkLocation } from '../types';
 import { EmployeeInviteModal } from '../components/EmployeeInviteModal';
 import { UserAvatar } from '../components/UserAvatar';
 import { ShiftConfigurator } from '../components/ShiftConfigurator';
@@ -80,6 +80,24 @@ export const EmployeesView: React.FC = () => {
   const [saturdayShiftWeekB, setSaturdayShiftWeekB] = useState<string>('Continua (09:00 - 14:00)');
   const [pinCode, setPinCode] = useState('1234');
 
+  // Work modalities allowed for clocking in: 'presencial' (Oficina), 'teletrabajo' (Casa), 'cliente' (Ruta)
+  const [allowedWorkLocations, setAllowedWorkLocations] = useState<AllowedWorkLocation[]>([
+    'presencial',
+    'teletrabajo',
+    'cliente',
+  ]);
+
+  const toggleWorkLocation = (loc: AllowedWorkLocation) => {
+    setAllowedWorkLocations((prev) => {
+      if (prev.includes(loc)) {
+        if (prev.length <= 1) return prev; // At least one modality must remain selected
+        return prev.filter((item) => item !== loc);
+      } else {
+        return [...prev, loc];
+      }
+    });
+  };
+
   // Vacation configuration state for employee form
   const [vacationDays, setVacationDays] = useState<number>(30);
   const [vacationDaysType, setVacationDaysType] = useState<'NATURALES' | 'LABORABLES'>('NATURALES');
@@ -151,6 +169,7 @@ export const EmployeesView: React.FC = () => {
     );
     setSaturdayShiftWeekB('Continua (09:00 - 14:00)');
     setPinCode(String(Math.floor(1000 + Math.random() * 9000)));
+    setAllowedWorkLocations(['presencial', 'teletrabajo', 'cliente']);
     setIsFormOpen(true);
   };
 
@@ -177,6 +196,12 @@ export const EmployeesView: React.FC = () => {
     setSaturdayShift(emp.saturdayShift || 'Continua (09:00 - 14:00)');
     setSaturdayShiftWeekB(emp.saturdayShiftWeekB || emp.saturdayShift || 'Continua (09:00 - 14:00)');
     setPinCode(emp.pinCode || '1234');
+    // Work modalities allowed for clocking in
+    setAllowedWorkLocations(
+      emp.allowedWorkLocations && emp.allowedWorkLocations.length > 0
+        ? emp.allowedWorkLocations
+        : ['presencial', 'teletrabajo', 'cliente']
+    );
     // Load vacation configuration
     setVacationDays(emp.vacationDays ?? 30);
     setVacationDaysType(emp.vacationDaysType ?? 'NATURALES');
@@ -229,6 +254,7 @@ export const EmployeesView: React.FC = () => {
             saturdayShift,
             saturdayShiftWeekB,
             pinCode,
+            allowedWorkLocations: allowedWorkLocations.length > 0 ? allowedWorkLocations : ['presencial'],
             vacationDays: cleanVacDays,
             vacationDaysType,
             vacationNotes: vacationNotes.trim(),
@@ -315,6 +341,7 @@ export const EmployeesView: React.FC = () => {
           saturdayShift,
           saturdayShiftWeekB,
           pinCode,
+          allowedWorkLocations: allowedWorkLocations.length > 0 ? allowedWorkLocations : ['presencial'],
           vacationDays: cleanVacDays,
           vacationDaysType,
           vacationNotes: vacationNotes.trim(),
@@ -343,6 +370,7 @@ export const EmployeesView: React.FC = () => {
           saturdayReferenceDate,
           saturdayShift,
           saturdayShiftWeekB,
+          allowedWorkLocations: allowedWorkLocations.length > 0 ? allowedWorkLocations : ['presencial'],
           joinedDate: new Date().toISOString().slice(0, 10),
           pinCode,
           vacationDays: cleanVacDays,
@@ -874,6 +902,46 @@ export const EmployeesView: React.FC = () => {
                 })()}
               </div>
 
+              {/* Work Locations Allowed Badge */}
+              <div className="col-span-2 sm:col-span-3 bg-indigo-50/60 border border-indigo-100/90 rounded-xl px-3 py-1.5 flex items-center justify-between gap-2 flex-wrap text-xs">
+                <div className="flex items-center gap-1.5 flex-wrap">
+                  <span className="material-symbols-outlined text-xs text-indigo-600">domain_verification</span>
+                  <span className="text-[10px] font-bold uppercase text-indigo-900">Modalidad Fichaje:</span>
+                  <div className="flex items-center gap-1 flex-wrap">
+                    {(() => {
+                      const locs =
+                        emp.allowedWorkLocations && emp.allowedWorkLocations.length > 0
+                          ? emp.allowedWorkLocations
+                          : (['presencial', 'teletrabajo', 'cliente'] as AllowedWorkLocation[]);
+                      return locs.map((loc) => (
+                        <span
+                          key={loc}
+                          className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-bold bg-white border border-indigo-200/80 text-indigo-950 shadow-2xs"
+                        >
+                          <span>{loc === 'presencial' ? '🏢' : loc === 'teletrabajo' ? '🏠' : '🚗'}</span>
+                          <span>{loc === 'presencial' ? 'Oficina' : loc === 'teletrabajo' ? 'Casa' : 'Ruta'}</span>
+                        </span>
+                      ));
+                    })()}
+                  </div>
+                </div>
+                {emp.allowedWorkLocations && emp.allowedWorkLocations.length === 1 && (
+                  <span className="text-[9px] font-extrabold uppercase text-indigo-700 bg-indigo-100/80 px-1.5 py-0.5 rounded border border-indigo-200">
+                    Solo {emp.allowedWorkLocations[0] === 'presencial' ? 'Oficina' : emp.allowedWorkLocations[0] === 'teletrabajo' ? 'Casa' : 'Ruta'}
+                  </span>
+                )}
+                {emp.allowedWorkLocations && emp.allowedWorkLocations.length > 1 && emp.allowedWorkLocations.length < 3 && (
+                  <span className="text-[9px] font-extrabold uppercase text-purple-700 bg-purple-100/80 px-1.5 py-0.5 rounded border border-purple-200">
+                    Combinado ({emp.allowedWorkLocations.length})
+                  </span>
+                )}
+                {(!emp.allowedWorkLocations || emp.allowedWorkLocations.length === 3) && (
+                  <span className="text-[9px] font-bold uppercase text-slate-500 bg-white/70 px-1.5 py-0.5 rounded border border-slate-200">
+                    Todas (3)
+                  </span>
+                )}
+              </div>
+
               {/* Vacation Quota Status Bar */}
               <div className="col-span-2 sm:col-span-3 bg-amber-50/80 border border-amber-200/80 rounded-xl px-3 py-2 flex flex-wrap justify-between items-center gap-2">
                 <div className="flex items-center gap-1.5 flex-wrap">
@@ -1230,6 +1298,156 @@ export const EmployeesView: React.FC = () => {
                     placeholder="Senior Developer..."
                     className="w-full bg-slate-50 border border-slate-300 p-2.5 rounded-xl text-xs font-bold focus:outline-none focus:ring-2 focus:ring-indigo-500"
                   />
+                </div>
+              </div>
+
+              {/* Field 6.5: MODALIDAD DE TRABAJO PERMITIDA (PRESENCIAL, CASA O RUTA) */}
+              <div className="mt-4 pt-4 border-t-2 border-slate-200 flex flex-col gap-3">
+                <div className="flex items-center justify-between gap-2 flex-wrap">
+                  <div className="flex items-center gap-2 text-slate-900">
+                    <span className="material-symbols-outlined text-2xl font-black text-indigo-600">domain_verification</span>
+                    <div>
+                      <h3 className="font-black text-sm uppercase tracking-wider">
+                        MODALIDAD DE TRABAJO PERMITIDA (FICHAJE) *
+                      </h3>
+                      <p className="text-[11px] text-slate-500">
+                        Configura las opciones que se mostrarán en la pantalla de fichaje del empleado.
+                      </p>
+                    </div>
+                  </div>
+                  <span className="text-[10px] font-black uppercase px-2.5 py-1 rounded-full bg-indigo-50 text-indigo-800 border border-indigo-200">
+                    {allowedWorkLocations.length === 3
+                      ? 'Todas Autorizadas (3)'
+                      : allowedWorkLocations.length === 2
+                      ? 'Modalidad Combinada (2)'
+                      : 'Modalidad Fija (1)'}
+                  </span>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                  {/* Presencial / Oficina */}
+                  <button
+                    type="button"
+                    onClick={() => toggleWorkLocation('presencial')}
+                    className={`p-3.5 rounded-2xl border-2 text-left transition-all cursor-pointer flex flex-col justify-between gap-2.5 ${
+                      allowedWorkLocations.includes('presencial')
+                        ? 'bg-indigo-50/50 border-indigo-600 ring-2 ring-indigo-500/20 shadow-xs'
+                        : 'bg-slate-50 border-slate-200 text-slate-400 hover:bg-slate-100'
+                    }`}
+                  >
+                    <div className="flex items-center justify-between w-full">
+                      <span className="text-2xl">🏢</span>
+                      <span
+                        className={`material-symbols-outlined text-lg ${
+                          allowedWorkLocations.includes('presencial') ? 'text-indigo-600 font-bold' : 'text-slate-300'
+                        }`}
+                      >
+                        {allowedWorkLocations.includes('presencial') ? 'check_circle' : 'radio_button_unchecked'}
+                      </span>
+                    </div>
+                    <div>
+                      <span
+                        className={`text-xs font-black block ${
+                          allowedWorkLocations.includes('presencial') ? 'text-slate-900' : 'text-slate-500'
+                        }`}
+                      >
+                        Presencial (Oficina)
+                      </span>
+                      <span className="text-[11px] text-slate-500 leading-tight block mt-0.5">
+                        Sede central, oficinas o almacén
+                      </span>
+                    </div>
+                  </button>
+
+                  {/* Casa (Teletrabajo) */}
+                  <button
+                    type="button"
+                    onClick={() => toggleWorkLocation('teletrabajo')}
+                    className={`p-3.5 rounded-2xl border-2 text-left transition-all cursor-pointer flex flex-col justify-between gap-2.5 ${
+                      allowedWorkLocations.includes('teletrabajo')
+                        ? 'bg-indigo-50/50 border-indigo-600 ring-2 ring-indigo-500/20 shadow-xs'
+                        : 'bg-slate-50 border-slate-200 text-slate-400 hover:bg-slate-100'
+                    }`}
+                  >
+                    <div className="flex items-center justify-between w-full">
+                      <span className="text-2xl">🏠</span>
+                      <span
+                        className={`material-symbols-outlined text-lg ${
+                          allowedWorkLocations.includes('teletrabajo') ? 'text-indigo-600 font-bold' : 'text-slate-300'
+                        }`}
+                      >
+                        {allowedWorkLocations.includes('teletrabajo') ? 'check_circle' : 'radio_button_unchecked'}
+                      </span>
+                    </div>
+                    <div>
+                      <span
+                        className={`text-xs font-black block ${
+                          allowedWorkLocations.includes('teletrabajo') ? 'text-slate-900' : 'text-slate-500'
+                        }`}
+                      >
+                        Casa (Teletrabajo)
+                      </span>
+                      <span className="text-[11px] text-slate-500 leading-tight block mt-0.5">
+                        Fichaje en remoto desde domicilio
+                      </span>
+                    </div>
+                  </button>
+
+                  {/* Ruta (Clientes / En Desplazamiento) */}
+                  <button
+                    type="button"
+                    onClick={() => toggleWorkLocation('cliente')}
+                    className={`p-3.5 rounded-2xl border-2 text-left transition-all cursor-pointer flex flex-col justify-between gap-2.5 ${
+                      allowedWorkLocations.includes('cliente')
+                        ? 'bg-indigo-50/50 border-indigo-600 ring-2 ring-indigo-500/20 shadow-xs'
+                        : 'bg-slate-50 border-slate-200 text-slate-400 hover:bg-slate-100'
+                    }`}
+                  >
+                    <div className="flex items-center justify-between w-full">
+                      <span className="text-2xl">🚗</span>
+                      <span
+                        className={`material-symbols-outlined text-lg ${
+                          allowedWorkLocations.includes('cliente') ? 'text-indigo-600 font-bold' : 'text-slate-300'
+                        }`}
+                      >
+                        {allowedWorkLocations.includes('cliente') ? 'check_circle' : 'radio_button_unchecked'}
+                      </span>
+                    </div>
+                    <div>
+                      <span
+                        className={`text-xs font-black block ${
+                          allowedWorkLocations.includes('cliente') ? 'text-slate-900' : 'text-slate-500'
+                        }`}
+                      >
+                        Ruta (Desplazamiento)
+                      </span>
+                      <span className="text-[11px] text-slate-500 leading-tight block mt-0.5">
+                        Técnicos en ruta o comerciales
+                      </span>
+                    </div>
+                  </button>
+                </div>
+
+                <div className="bg-slate-50 p-2.5 rounded-xl border border-slate-200 flex items-center gap-2 text-xs text-slate-600">
+                  <span className="material-symbols-outlined text-base text-indigo-600 shrink-0">help_outline</span>
+                  <span>
+                    Comportamiento en terminal:{' '}
+                    <strong className="text-slate-800">
+                      {allowedWorkLocations.length === 3
+                        ? 'El empleado tendrá disponibles los 3 botones: Oficina, Casa y Ruta.'
+                        : allowedWorkLocations.length === 2
+                        ? `El empleado solo verá los botones de ${allowedWorkLocations
+                            .map((l) => (l === 'presencial' ? 'Oficina' : l === 'teletrabajo' ? 'Casa' : 'Ruta'))
+                            .join(' y ')}.`
+                        : `El empleado quedará fijado en ${
+                            allowedWorkLocations[0] === 'presencial'
+                              ? 'Presencial (Oficina)'
+                              : allowedWorkLocations[0] === 'teletrabajo'
+                              ? 'Casa (Teletrabajo)'
+                              : 'Ruta (Desplazamiento)'
+                          } (las demás opciones desaparecerán de su pantalla).`}
+                    </strong>
+                  </span>
                 </div>
               </div>
 

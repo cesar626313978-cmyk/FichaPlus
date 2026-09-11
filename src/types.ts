@@ -21,6 +21,8 @@ export interface CompanyOperatingHours {
 
 export type SaturdayPlanType = 'NO' | 'ALTERNO_A' | 'ALTERNO_B' | 'TODOS';
 
+export type AllowedWorkLocation = 'presencial' | 'teletrabajo' | 'cliente';
+
 export interface EmployeeRecord {
   id: string;
   employeeNumber: string; // EMP-001
@@ -34,6 +36,7 @@ export interface EmployeeRecord {
   weeklyHours: number;
   workdayType?: 'COMPLETA' | 'PARCIAL'; // Jornada Completa (40h) / Parcial (<40h)
   workplaceLocation?: string; // Centro de trabajo específico (ej. Sede Central, Almacén)
+  allowedWorkLocations?: AllowedWorkLocation[]; // Modalidades de fichaje permitidas: 'presencial' (Oficina), 'teletrabajo' (Casa), 'cliente' (Ruta)
   role?: UserRole; // 'employee' | 'admin' | 'manager'
   status: 'ACTIVO' | 'VACACIONES' | 'BAJA_MEDICA' | 'INACTIVO';
   avatarUrl: string;
