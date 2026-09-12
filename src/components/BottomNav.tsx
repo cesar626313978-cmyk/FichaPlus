@@ -19,9 +19,9 @@ export const BottomNav: React.FC = () => {
   const standardEmployeeItems: NavItem[] = [
     { id: 'dashboard', label: 'Fichar', icon: 'timer' },
     { id: 'history', label: 'Historial', icon: 'calendar_month' },
+    { id: 'incidents', label: 'Incidencias', icon: 'edit_note' },
     { id: 'requests', label: 'Vacaciones', icon: 'flight_takeoff' },
     { id: 'monthly_sign', label: 'Firma', icon: 'draw' },
-    { id: 'alarms', label: 'Alarmas', icon: 'alarm' },
   ];
 
   // Employee view for Administrator (includes direct toggle back to Admin mode)

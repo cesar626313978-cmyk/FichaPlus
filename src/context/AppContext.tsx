@@ -938,72 +938,6 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     };
   }, [punchDocKey, profile?.id, profile?.email, profile?.name, currentEmployee?.id]);
 
-  // Fallback Workday Recovery from Cloud time_entries:
-  // If active_punches was empty but an incomplete time_entry exists for today in Firestore,
-  // restore the active workday automatically on PC.
-  useEffect(() => {
-    if (isClockedIn || !punchDocKey) return;
-
-    const todayDate = new Date();
-    const todayStr = todayDate.toISOString().slice(0, 10);
-    const dayOfMonth = todayDate.getDate().toString();
-
-    const matchingEntry = timeEntries.find(
-      (e) =>
-        !e.isComplete &&
-        (e.date?.includes(todayStr) || e.date?.includes(dayOfMonth)) &&
-        (e.userId === profile.id ||
-          (currentEmployee && e.userId === currentEmployee.id) ||
-          (profile.email && e.userId?.toLowerCase() === profile.email.toLowerCase()) ||
-          (profile.name && e.userName?.toLowerCase() === profile.name.toLowerCase()))
-    );
-
-    if (matchingEntry && matchingEntry.clockIn) {
-      try {
-        const [h, m] = matchingEntry.clockIn.split(':').map(Number);
-        if (!isNaN(h) && !isNaN(m)) {
-          const d = new Date();
-          d.setHours(h, m, 0, 0);
-          const reconstructedTimestamp = d.getTime();
-          const now = Date.now();
-          if (reconstructedTimestamp <= now && now - reconstructedTimestamp < 24 * 3600 * 1000) {
-            console.log('[FichaPlus Cloud] Restoring active workday from incomplete time_entry:', matchingEntry);
-            setIsClockedIn(true);
-            setClockInTime(matchingEntry.clockIn);
-            setClockInTimestamp(reconstructedTimestamp);
-            setActiveEntryId(matchingEntry.id);
-            setWorkType(matchingEntry.workType || 'presencial');
-            setWorkdayPlan(matchingEntry.workdayPlan || 'continua');
-            setElapsedSeconds(Math.max(0, Math.floor((now - reconstructedTimestamp) / 1000)));
-
-            const recoveredDoc: ActivePunchDoc = {
-              punchDocKey,
-              userId: profile.id,
-              userEmail: profile.email?.toLowerCase() || '',
-              userName: profile.name,
-              isClockedIn: true,
-              isPaused: false,
-              clockInTime: matchingEntry.clockIn,
-              clockInTimestamp: reconstructedTimestamp,
-              currentShiftNumber: 1,
-              workdayPlan: matchingEntry.workdayPlan || 'continua',
-              workType: matchingEntry.workType || 'presencial',
-              pausedAtTimestamp: null,
-              accumulatedPauseSeconds: 0,
-              pauseReason: 'Pausa',
-              date: todayStr,
-              activeEntryId: matchingEntry.id,
-              updatedAt: now,
-            };
-            safeFirestoreWrite(setDoc(doc(db, 'active_punches', punchDocKey), recoveredDoc), 1200);
-          }
-        }
-      } catch (err) {
-        console.warn('Could not restore punch from time_entry:', err);
-      }
-    }
-  }, [timeEntries, isClockedIn, punchDocKey, profile.id, profile.email, profile.name, currentEmployee?.id]);
-
   // Sync punch state when user profile changes
   useEffect(() => {
     if (!profile?.id) return;
@@ -1789,26 +1723,45 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     const targetShift = shiftNum || currentShiftNumber;
     const now = new Date();
     const timeShort = now.toTimeString().slice(0, 5);
-    const durationHours = parseFloat((elapsedSeconds / 3600).toFixed(1));
+    
+    // Accurate duration in hours (with 2 decimal precision, e.g. 5 min = 0.08h, 2 min = 0.03h, 30s = 0.01h)
+    const rawSeconds = Math.max(0, elapsedSeconds);
+    const calculatedHours = Math.round((rawSeconds / 3600) * 100) / 100;
+    const safeDurationHours = calculatedHours > 0 ? calculatedHours : (rawSeconds > 0 ? 0.01 : 0);
     const finalActiveEntryId = activeEntryId;
 
+    // Reset ALL in-memory shift states immediately
     setIsClockedIn(false);
     setIsPaused(false);
+    setClockInTime(null);
     setClockInTimestamp(null);
     setPausedAtTimestamp(null);
     setAccumulatedPauseSeconds(0);
+    setElapsedSeconds(0);
     setActiveEntryId(null);
     triggerHaptic('clockOut');
     playDeviceChime('clockOut');
 
-    // Clean active punch state from localStorage immediately
-    const currentUserId = profile?.id || currentEmployee?.id || 'emp-001';
+    // Clean active punch state from localStorage across all possible user identifiers
+    const userIdsToClean = [
+      profile?.id,
+      currentEmployee?.id,
+      'emp-001',
+      'cesar-emp-01',
+    ].filter(Boolean) as string[];
+
+    userIdsToClean.forEach((uId) => {
+      try {
+        localStorage.removeItem(`fichaplus_punch_${uId}`);
+      } catch {}
+    });
     try {
-      localStorage.removeItem(`fichaplus_punch_${currentUserId}`);
       localStorage.removeItem('fichaplus_active_punch_state');
+      localStorage.setItem('fichaplus_last_clock_out', String(Date.now()));
+      sessionStorage.setItem('fichaplus_last_clock_out', String(Date.now()));
     } catch {}
 
-    // Update active_punches in Cloud Firestore to notify other devices
+    // Update active_punches in Cloud Firestore to notify all devices immediately
     if (punchDocKey) {
       safeFirestoreWrite(
         setDoc(
@@ -1829,30 +1782,30 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }
 
     if (workdayPlan === 'partida' && targetShift === 1) {
-      // Shift 1 finished -> Go to between shifts
+      // Shift 1 finished -> Mark shift1 completed, register hours accurately, and complete entry
       setShift1((prev) => ({
         ...prev,
         clockOut: timeShort,
-        elapsedSeconds,
+        elapsedSeconds: rawSeconds,
         status: 'completed',
       }));
-      setElapsedSeconds(0);
-      setClockInTime(null);
       setCurrentShiftNumber(2);
 
       sendLocalNotification(
-        '✓ Salida Turno 1 (Mañana) Registrada',
-        `Primer turno finalizado a las ${timeShort}. Podrás iniciar el Turno 2 (Tarde) al volver de la comida.`
+        '✓ Salida Registrada',
+        `Salida registrada a las ${timeShort}. Total trabajado: ${safeDurationHours}h.`
       );
 
       setTimeEntries((prev) => {
         const updated = prev.map((item, idx) =>
-          idx === 0 || (finalActiveEntryId && item.id === finalActiveEntryId)
+          (finalActiveEntryId && item.id === finalActiveEntryId) || idx === 0
             ? {
                 ...item,
+                clockOut: timeShort,
                 shift1ClockOut: timeShort,
-                shift1DurationHours: durationHours || 4.5,
-                totalHoursWorked: durationHours || 4.5,
+                shift1DurationHours: safeDurationHours,
+                totalHoursWorked: safeDurationHours,
+                isComplete: true,
               }
             : item
         );
@@ -1867,9 +1820,11 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           setDoc(
             doc(db, 'time_entries', finalActiveEntryId),
             {
+              clockOut: timeShort,
               shift1ClockOut: timeShort,
-              shift1DurationHours: durationHours || 4.5,
-              totalHoursWorked: durationHours || 4.5,
+              shift1DurationHours: safeDurationHours,
+              totalHoursWorked: safeDurationHours,
+              isComplete: true,
             },
             { merge: true }
           ),
@@ -1882,28 +1837,33 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         setShift2((prev) => ({
           ...prev,
           clockOut: timeShort,
-          elapsedSeconds,
+          elapsedSeconds: rawSeconds,
           status: 'completed',
         }));
       }
 
-      const shift1Hours = shift1.status === 'completed' ? parseFloat((shift1.elapsedSeconds / 3600).toFixed(1)) : 0;
-      const totalDayHours = workdayPlan === 'partida' ? parseFloat((shift1Hours + durationHours).toFixed(1)) : durationHours;
+      const shift1Hours = shift1.status === 'completed' && shift1.elapsedSeconds
+        ? Math.round((shift1.elapsedSeconds / 3600) * 100) / 100
+        : 0;
+
+      const totalDayHours = workdayPlan === 'partida'
+        ? Math.round((shift1Hours + safeDurationHours) * 100) / 100
+        : safeDurationHours;
 
       sendLocalNotification(
         '✓ Salida Registrada con Éxito',
-        `Jornada finalizada a las ${timeShort}. Total trabajado: ${totalDayHours || 8.0}h.`
+        `Jornada finalizada a las ${timeShort}. Total trabajado: ${totalDayHours}h.`
       );
 
       setTimeEntries((prev) => {
         const updated = prev.map((item, idx) =>
-          idx === 0 || (finalActiveEntryId && item.id === finalActiveEntryId)
+          (finalActiveEntryId && item.id === finalActiveEntryId) || idx === 0
             ? {
                 ...item,
                 clockOut: timeShort,
                 shift2ClockOut: workdayPlan === 'partida' ? timeShort : undefined,
-                shift2DurationHours: workdayPlan === 'partida' ? durationHours : undefined,
-                totalHoursWorked: totalDayHours || 8.0,
+                shift2DurationHours: workdayPlan === 'partida' ? safeDurationHours : undefined,
+                totalHoursWorked: totalDayHours,
                 isComplete: true,
               }
             : item
@@ -1921,8 +1881,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
             {
               clockOut: timeShort,
               shift2ClockOut: workdayPlan === 'partida' ? timeShort : undefined,
-              shift2DurationHours: workdayPlan === 'partida' ? durationHours : undefined,
-              totalHoursWorked: totalDayHours || 8.0,
+              shift2DurationHours: workdayPlan === 'partida' ? safeDurationHours : undefined,
+              totalHoursWorked: totalDayHours,
               isComplete: true,
             },
             { merge: true }

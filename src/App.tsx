@@ -142,7 +142,7 @@ const MainLayout: React.FC = () => {
       <Header />
       <div className="flex flex-1 max-w-[1440px] w-full mx-auto">
         <DesktopNav />
-        <main className="flex-1 p-4 md:p-8 pb-24 md:pb-12 overflow-x-hidden">
+        <main className="flex-1 p-2 sm:p-4 md:p-8 pb-20 md:pb-12 overflow-x-hidden">
           {renderView()}
         </main>
       </div>

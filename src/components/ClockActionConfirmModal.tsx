@@ -106,7 +106,7 @@ export const ClockActionConfirmModal: React.FC<Props> = ({
     case 'stop_shift_2':
     case 'stop_single':
       title = '¿Registrar Salida?';
-      subtitle = 'Se registrará tu hora de salida oficial y se computará el total de horas trabajadas en el día.';
+      subtitle = 'Se registrará tu hora de salida oficial y se computará de forma exacta el tiempo trabajado hoy (incluso si han sido solo unos minutos).';
       iconName = 'logout';
       badgeColor = 'bg-rose-100 text-rose-800 border-rose-200';
       confirmBtnText = 'Confirmar Salida';

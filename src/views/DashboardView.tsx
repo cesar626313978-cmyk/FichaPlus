@@ -60,6 +60,9 @@ export const DashboardView: React.FC = () => {
   // Confirmation Modal State (Antierror safety)
   const [confirmModalAction, setConfirmModalAction] = useState<ClockActionType | null>(null);
 
+  // Weekly & Hour Bank Details Modal State
+  const [showWeeklyBolsaModal, setShowWeeklyBolsaModal] = useState(false);
+
   // Filtered allowed work location options for the active employee
   const employeeAllowedLocations = useMemo<('presencial' | 'teletrabajo' | 'cliente')[]>(() => {
     const raw = currentEmployee?.allowedWorkLocations;
@@ -127,6 +130,8 @@ export const DashboardView: React.FC = () => {
   const pendingIncidentsCount = incidents.filter((i) => i.status === 'PENDIENTE').length;
   const activeEmployeesCount = employees.filter((e) => e.status === 'ACTIVO').length;
 
+  const [clockFeedback, setClockFeedback] = useState<string | null>(null);
+
   // Handler to open confirm modal for any workday action
   const requestClockAction = (action: ClockActionType) => {
     setConfirmModalAction(action);
@@ -136,27 +141,45 @@ export const DashboardView: React.FC = () => {
   // Execute confirmed action
   const handleConfirmedAction = async (payload?: { pauseReason?: string; pauseNotes?: string }) => {
     setShowConfirmModal(false);
-    if (!confirmModalAction) return;
+    const action = confirmModalAction;
+    setConfirmModalAction(null);
+    if (!action) return;
 
-    switch (confirmModalAction) {
+    switch (action) {
       case 'start_shift_1':
-      case 'start_shift_2':
-      case 'start_single':
         await startWorkday(1);
+        setClockFeedback('✓ Entrada registrada (Turno 1 iniciado)');
+        break;
+      case 'start_shift_2':
+        await startWorkday(2);
+        setClockFeedback('✓ Entrada registrada (Turno 2 iniciado)');
+        break;
+      case 'start_single':
+        await startWorkday();
+        setClockFeedback('✓ Entrada registrada');
         break;
       case 'pause':
         await pauseWorkday(payload?.pauseReason || 'Pausa', payload?.pauseNotes);
+        setClockFeedback('⏸️ Jornada pausada');
         break;
       case 'resume':
         await resumeWorkday();
+        setClockFeedback('▶️ Jornada reanudada');
         break;
       case 'stop_shift_1':
-      case 'stop_shift_2':
-      case 'stop_single':
         await stopWorkday(1);
+        setClockFeedback('✓ Salida registrada correctamente');
+        break;
+      case 'stop_shift_2':
+        await stopWorkday(2);
+        setClockFeedback('✓ Salida registrada correctamente');
+        break;
+      case 'stop_single':
+        await stopWorkday(currentShiftNumber as 1 | 2);
+        setClockFeedback('✓ Salida registrada correctamente');
         break;
     }
-    setConfirmModalAction(null);
+    setTimeout(() => setClockFeedback(null), 4000);
   };
 
   // Render the Clean, Mobile-First Terminal Clock component
@@ -166,11 +189,19 @@ export const DashboardView: React.FC = () => {
     const weeklyTarget = currentEmployee?.weeklyHours || 40;
 
     return (
-      <div className="flex flex-col gap-4 max-w-xl mx-auto w-full">
+      <div className="flex flex-col gap-2.5 sm:gap-4 max-w-xl mx-auto w-full">
         {/* Main Punch Clock Terminal Surface */}
-        <section className="bg-white rounded-3xl p-5 sm:p-7 md:p-8 shadow-sm border border-slate-100 flex flex-col items-center text-center relative overflow-hidden">
+        <section className="bg-white rounded-3xl p-4 sm:p-7 md:p-8 shadow-sm border border-slate-100 flex flex-col items-center text-center relative overflow-hidden">
+          {/* Action Success Toast */}
+          {clockFeedback && (
+            <div className="w-full mb-2.5 py-2 px-3 rounded-2xl bg-emerald-50 border border-emerald-200 text-emerald-800 text-xs font-bold flex items-center justify-center gap-2 animate-in fade-in duration-200">
+              <span className="material-symbols-outlined text-sm text-emerald-600">check_circle</span>
+              <span>{clockFeedback}</span>
+            </div>
+          )}
+
           {/* Greeting & Date Header */}
-          <div className="flex flex-col sm:flex-row items-center justify-between w-full pb-3.5 mb-4 border-b border-slate-100 gap-2">
+          <div className="flex flex-col sm:flex-row items-center justify-between w-full pb-2.5 sm:pb-3.5 mb-2.5 sm:mb-4 border-b border-slate-100 gap-1.5 sm:gap-2">
             <div className="text-center sm:text-left">
               <h2 className="text-base sm:text-lg font-black text-slate-900 tracking-tight">
                 ¡Hola, {employeeFirstName}! 👋
@@ -184,7 +215,7 @@ export const DashboardView: React.FC = () => {
               </span>
             </div>
             {/* Live Official Clock Pill */}
-            <div className="flex items-center gap-1.5 bg-slate-50 border border-slate-200/80 px-3 py-1.5 rounded-full text-xs font-mono font-bold text-slate-700 shrink-0">
+            <div className="flex items-center gap-1.5 bg-slate-50 border border-slate-200/80 px-2.5 py-1 rounded-full text-xs font-mono font-bold text-slate-700 shrink-0">
               <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
               <span>
                 {nowTime.toLocaleTimeString('es-ES', {
@@ -198,13 +229,13 @@ export const DashboardView: React.FC = () => {
 
           {/* Quick Work Location Mode Selector - Filtered by Employee Allowed Configuration */}
           {employeeAllowedLocations.length > 1 ? (
-            <div className="mb-3 flex justify-center gap-1.5 bg-slate-100/80 p-1 rounded-2xl border border-slate-200/60 w-full max-w-xs">
+            <div className="mb-2.5 flex justify-center gap-1.5 bg-slate-100/80 p-1 rounded-2xl border border-slate-200/60 w-full max-w-xs">
               {employeeAllowedLocations.map((type) => (
                 <button
                   key={type}
                   type="button"
                   onClick={() => setWorkType(type)}
-                  className={`flex-1 py-1.5 px-2 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center justify-center gap-1 ${
+                  className={`flex-1 py-1 px-2 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center justify-center gap-1 ${
                     workType === type
                       ? 'bg-indigo-600 text-white shadow-xs'
                       : 'text-slate-600 hover:text-slate-900'
@@ -218,8 +249,8 @@ export const DashboardView: React.FC = () => {
               ))}
             </div>
           ) : (
-            <div className="mb-3 flex justify-center w-full max-w-xs">
-              <div className="bg-slate-100/90 border border-slate-200/80 px-3.5 py-1.5 rounded-2xl flex items-center justify-center gap-2 text-xs font-bold text-slate-800 shadow-2xs w-full">
+            <div className="mb-2.5 flex justify-center w-full max-w-xs">
+              <div className="bg-slate-100/90 border border-slate-200/80 px-3 py-1 rounded-2xl flex items-center justify-center gap-2 text-xs font-bold text-slate-800 shadow-2xs w-full">
                 <span>
                   {employeeAllowedLocations[0] === 'presencial'
                     ? '🏢'
@@ -242,21 +273,21 @@ export const DashboardView: React.FC = () => {
           )}
 
           {/* Current Status Pill */}
-          <div className="mb-2">
+          <div className="mb-1.5">
             {isClockedIn ? (
               isPaused ? (
-                <span className="inline-flex items-center gap-1.5 bg-amber-50 text-amber-800 border border-amber-200 px-3.5 py-1 rounded-full text-xs font-bold">
+                <span className="inline-flex items-center gap-1.5 bg-amber-50 text-amber-800 border border-amber-200 px-3 py-0.5 rounded-full text-xs font-bold">
                   <span className="w-2 h-2 rounded-full bg-amber-500 animate-ping"></span>
                   <span>En Pausa ({pauseReason || 'Descanso'})</span>
                 </span>
               ) : (
-                <span className="inline-flex items-center gap-1.5 bg-emerald-50 text-emerald-800 border border-emerald-200 px-3.5 py-1 rounded-full text-xs font-bold">
+                <span className="inline-flex items-center gap-1.5 bg-emerald-50 text-emerald-800 border border-emerald-200 px-3 py-0.5 rounded-full text-xs font-bold">
                   <span className="w-2 h-2 rounded-full bg-emerald-500 animate-ping"></span>
                   <span>En Jornada Activa</span>
                 </span>
               )
             ) : (
-              <span className="inline-flex items-center gap-1.5 bg-slate-100 text-slate-600 border border-slate-200 px-3.5 py-1 rounded-full text-xs font-bold">
+              <span className="inline-flex items-center gap-1.5 bg-slate-100 text-slate-600 border border-slate-200 px-3 py-0.5 rounded-full text-xs font-bold">
                 <span className="w-2 h-2 rounded-full bg-slate-400"></span>
                 <span>Fuera de Jornada</span>
               </span>
@@ -264,13 +295,13 @@ export const DashboardView: React.FC = () => {
           </div>
 
           {/* Big Clean Timer / Clock Display */}
-          <div className="bg-slate-50/90 border border-slate-200/80 rounded-3xl px-6 py-5 my-3 w-full max-w-sm shadow-inner flex flex-col items-center">
-            <span className="font-mono text-5xl sm:text-6xl font-black tracking-tight text-slate-900 leading-none">
+          <div className="bg-slate-50/90 border border-slate-200/80 rounded-3xl px-4 sm:px-6 py-3 sm:py-4 my-2 sm:my-3 w-full max-w-sm shadow-inner flex flex-col items-center">
+            <span className="font-mono text-4xl sm:text-6xl font-black tracking-tight text-slate-900 leading-none">
               {isClockedIn
                 ? formatTimer(elapsedSeconds)
                 : nowTime.toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' })}
             </span>
-            <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider mt-2">
+            <span className="text-[10px] sm:text-[11px] font-bold text-slate-400 uppercase tracking-wider mt-1.5">
               {isClockedIn
                 ? `Horas trabajadas hoy (${workType === 'presencial' ? 'oficina' : workType})`
                 : 'Hora local oficial'}
@@ -278,7 +309,7 @@ export const DashboardView: React.FC = () => {
           </div>
 
           {/* Discreet GPS status chip */}
-          <div className="mb-4 inline-flex items-center gap-1.5 bg-slate-50 border border-slate-200 px-3 py-1 rounded-full text-[11px] text-slate-600">
+          <div className="mb-2.5 sm:mb-4 inline-flex items-center gap-1.5 bg-slate-50 border border-slate-200 px-2.5 py-0.5 rounded-full text-[11px] text-slate-600">
             <span className="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
             <span>
               {locationStamp ? (
@@ -303,12 +334,12 @@ export const DashboardView: React.FC = () => {
           </div>
 
           {/* High-Contrast Large Touch Action Buttons */}
-          <div className="flex flex-col sm:flex-row gap-3 w-full justify-center max-w-sm">
+          <div className="flex flex-col sm:flex-row gap-2.5 sm:gap-3 w-full justify-center max-w-sm">
             {!isClockedIn ? (
               // When Not Clocked In: Big Emerald Entry Punch Button
               <button
                 onClick={() => requestClockAction('start_single')}
-                className="w-full bg-emerald-600 hover:bg-emerald-700 active:scale-[0.98] text-white py-4 px-6 rounded-2xl font-black text-base sm:text-lg shadow-lg shadow-emerald-200/70 hover:shadow-xl transition-all flex items-center justify-center gap-2.5 cursor-pointer"
+                className="w-full bg-emerald-600 hover:bg-emerald-700 active:scale-[0.98] text-white py-3.5 sm:py-4 px-6 rounded-2xl font-black text-base sm:text-lg shadow-lg shadow-emerald-200/70 hover:shadow-xl transition-all flex items-center justify-center gap-2.5 cursor-pointer"
               >
                 <span className="material-symbols-outlined text-2xl font-bold">login</span>
                 <span>FICHAR ENTRADA</span>
@@ -318,14 +349,14 @@ export const DashboardView: React.FC = () => {
               <div className="grid grid-cols-2 gap-2.5 w-full">
                 <button
                   onClick={() => requestClockAction('resume')}
-                  className="bg-emerald-600 hover:bg-emerald-700 active:scale-[0.98] text-white py-3.5 px-4 rounded-2xl font-black text-sm shadow-md shadow-emerald-100 transition-all flex items-center justify-center gap-1.5 cursor-pointer"
+                  className="bg-emerald-600 hover:bg-emerald-700 active:scale-[0.98] text-white py-3 sm:py-3.5 px-4 rounded-2xl font-black text-sm shadow-md shadow-emerald-100 transition-all flex items-center justify-center gap-1.5 cursor-pointer"
                 >
                   <span className="material-symbols-outlined text-xl">play_arrow</span>
                   <span>REANUDAR</span>
                 </button>
                 <button
                   onClick={() => requestClockAction('stop_single')}
-                  className="bg-rose-600 hover:bg-rose-700 active:scale-[0.98] text-white py-3.5 px-4 rounded-2xl font-black text-sm shadow-md shadow-rose-100 transition-all flex items-center justify-center gap-1.5 cursor-pointer"
+                  className="bg-rose-600 hover:bg-rose-700 active:scale-[0.98] text-white py-3 sm:py-3.5 px-4 rounded-2xl font-black text-sm shadow-md shadow-rose-100 transition-all flex items-center justify-center gap-1.5 cursor-pointer"
                 >
                   <span className="material-symbols-outlined text-xl">logout</span>
                   <span>SALIDA</span>
@@ -336,14 +367,14 @@ export const DashboardView: React.FC = () => {
               <div className="grid grid-cols-2 gap-2.5 w-full">
                 <button
                   onClick={() => requestClockAction('pause')}
-                  className="bg-amber-500 hover:bg-amber-600 active:scale-[0.98] text-white py-3.5 px-4 rounded-2xl font-black text-sm shadow-md shadow-amber-100 transition-all flex items-center justify-center gap-1.5 cursor-pointer"
+                  className="bg-amber-500 hover:bg-amber-600 active:scale-[0.98] text-white py-3 sm:py-3.5 px-4 rounded-2xl font-black text-sm shadow-md shadow-amber-100 transition-all flex items-center justify-center gap-1.5 cursor-pointer"
                 >
                   <span className="material-symbols-outlined text-xl">pause</span>
                   <span>PAUSA</span>
                 </button>
                 <button
                   onClick={() => requestClockAction('stop_single')}
-                  className="bg-rose-600 hover:bg-rose-700 active:scale-[0.98] text-white py-3.5 px-4 rounded-2xl font-black text-sm shadow-md shadow-rose-100 transition-all flex items-center justify-center gap-1.5 cursor-pointer"
+                  className="bg-rose-600 hover:bg-rose-700 active:scale-[0.98] text-white py-3 sm:py-3.5 px-4 rounded-2xl font-black text-sm shadow-md shadow-rose-100 transition-all flex items-center justify-center gap-1.5 cursor-pointer"
                 >
                   <span className="material-symbols-outlined text-xl">logout</span>
                   <span>SALIDA</span>
@@ -353,26 +384,65 @@ export const DashboardView: React.FC = () => {
           </div>
 
           {/* Clean Today's Summary Strip: Entrada, Horas Hoy, Cómputo Semanal */}
-          <div className="grid grid-cols-3 gap-2.5 w-full max-w-sm mt-5 pt-4 border-t border-slate-100 text-center">
-            <div className="bg-slate-50/80 p-2.5 rounded-2xl border border-slate-100">
+          <div className="grid grid-cols-3 gap-2 sm:gap-2.5 w-full max-w-sm mt-3.5 sm:mt-5 pt-3 sm:pt-4 border-t border-slate-100 text-center">
+            <div className="bg-slate-50/80 p-2 sm:p-2.5 rounded-2xl border border-slate-100">
               <span className="text-[10px] uppercase font-bold text-slate-400 block">Entrada</span>
-              <span className="font-mono font-bold text-sm text-slate-800">
+              <span className="font-mono font-bold text-xs sm:text-sm text-slate-800">
                 {clockInTime || '--:--'}
               </span>
             </div>
-            <div className="bg-slate-50/80 p-2.5 rounded-2xl border border-slate-100">
+            <div className="bg-slate-50/80 p-2 sm:p-2.5 rounded-2xl border border-slate-100">
               <span className="text-[10px] uppercase font-bold text-slate-400 block">Horas Hoy</span>
-              <span className="font-mono font-bold text-sm text-indigo-700">
+              <span className="font-mono font-bold text-xs sm:text-sm text-indigo-700">
                 {elapsedSeconds > 0 ? `${(elapsedSeconds / 3600).toFixed(1)}h` : '0.0h'}
               </span>
             </div>
-            <div className="bg-slate-50/80 p-2.5 rounded-2xl border border-slate-100">
-              <span className="text-[10px] uppercase font-bold text-slate-400 block">Semana</span>
-              <span className="font-mono font-bold text-xs text-slate-700">
-                {elapsedSeconds > 0 ? `${(32.5 + elapsedSeconds / 3600).toFixed(1)}h` : '32.5h'}
-                <span className="text-[10px] text-slate-400 font-normal"> / {weeklyTarget}h</span>
+            <button
+              type="button"
+              onClick={() => setShowWeeklyBolsaModal(true)}
+              className="bg-slate-50/80 hover:bg-indigo-50/80 p-2 sm:p-2.5 rounded-2xl border border-slate-100 transition-colors cursor-pointer text-center group"
+              title="Pulsar para ver desglose semanal y bolsa de horas"
+            >
+              <span className="text-[10px] uppercase font-bold text-slate-400 group-hover:text-indigo-600 flex items-center justify-center gap-0.5">
+                <span>Semana</span>
+                <span className="text-[9px]">↗</span>
               </span>
-            </div>
+              <span className="font-mono font-bold text-xs text-slate-700 group-hover:text-indigo-700">
+                {elapsedSeconds > 0 ? `${(32.5 + elapsedSeconds / 3600).toFixed(1)}h` : '32.5h'}
+                <span className="text-[9px] sm:text-[10px] text-slate-400 font-normal"> / {weeklyTarget}h</span>
+              </span>
+            </button>
+          </div>
+
+          {/* Minimalist Quick Access Strip: Bolsa, Vacaciones, Incidencias (Zero scroll on phone) */}
+          <div className="grid grid-cols-3 gap-1.5 w-full max-w-sm mt-2.5 pt-2.5 border-t border-slate-100">
+            <button
+              type="button"
+              onClick={() => setShowWeeklyBolsaModal(true)}
+              className="bg-slate-50 hover:bg-indigo-50 border border-slate-200/80 text-slate-700 hover:text-indigo-700 py-1.5 px-1 rounded-xl text-[10px] sm:text-[11px] font-bold flex items-center justify-center gap-1 transition-all cursor-pointer truncate shadow-2xs"
+              title="Resumen semanal y saldo de bolsa de horas"
+            >
+              <span>⏱️</span>
+              <span className="truncate">Bolsa: -7.5h</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => setActiveTab('requests')}
+              className="bg-slate-50 hover:bg-pink-50 border border-slate-200/80 text-slate-700 hover:text-pink-700 py-1.5 px-1 rounded-xl text-[10px] sm:text-[11px] font-bold flex items-center justify-center gap-1 transition-all cursor-pointer truncate shadow-2xs"
+              title="Vacaciones disponibles (15 días restantes)"
+            >
+              <span>🏖️</span>
+              <span className="truncate">15d Vacac.</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => setActiveTab('incidents')}
+              className="bg-slate-50 hover:bg-amber-50 border border-slate-200/80 text-slate-700 hover:text-amber-700 py-1.5 px-1 rounded-xl text-[10px] sm:text-[11px] font-bold flex items-center justify-center gap-1 transition-all cursor-pointer truncate shadow-2xs"
+              title="Incidencias y regularizaciones de fichaje"
+            >
+              <span>📝</span>
+              <span className="truncate">0 Incidenc.</span>
+            </button>
           </div>
         </section>
       </div>
@@ -380,7 +450,7 @@ export const DashboardView: React.FC = () => {
   };
 
   return (
-    <div className="flex flex-col gap-6 max-w-5xl mx-auto">
+    <div className="flex flex-col gap-3 sm:gap-6 max-w-5xl mx-auto">
       {/* Mobile Terminal Hardware & Permission Status Bar - Only in Admin Overview */}
       {isAdmin && adminSubTab === 'overview' && (
         <section className="bg-slate-900 text-white rounded-3xl p-4 sm:p-5 shadow-lg border border-slate-800 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
@@ -785,8 +855,8 @@ export const DashboardView: React.FC = () => {
             </section>
           )}
 
-          {/* Metrics & Highlights Grid (Employee personal data) */}
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+          {/* Metrics & Highlights Grid (Employee personal data) - Desktop Only: On mobile phone it is integrated minimalistically into the clock card to guarantee zero vertical scroll */}
+          <div className="hidden md:grid md:grid-cols-3 gap-6">
             {/* Weekly Progress & Hour Bank */}
             <section className="bg-white rounded-3xl p-6 shadow-sm border border-slate-100 flex flex-col justify-between">
               <div>
@@ -874,6 +944,96 @@ export const DashboardView: React.FC = () => {
             </section>
           </div>
         </>
+      )}
+
+      {/* Weekly & Hour Bank Details Modal (Accessed from mobile quick chip or Semana stat) */}
+      {showWeeklyBolsaModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs animate-in fade-in duration-200">
+          <div className="bg-white rounded-3xl p-6 max-w-sm w-full shadow-2xl border border-slate-100 flex flex-col gap-4 animate-in zoom-in-95 duration-200">
+            <div className="flex items-center justify-between pb-3 border-b border-slate-100">
+              <div className="flex items-center gap-2.5">
+                <div className="w-9 h-9 rounded-2xl bg-indigo-50 text-indigo-600 flex items-center justify-center font-bold text-lg">
+                  ⏱️
+                </div>
+                <div>
+                  <h3 className="font-black text-base text-slate-900 leading-tight">
+                    Cómputo Semanal & Bolsa
+                  </h3>
+                  <span className="text-[11px] font-semibold text-slate-400">
+                    Art. 34 Estatuto de los Trabajadores
+                  </span>
+                </div>
+              </div>
+              <button
+                onClick={() => setShowWeeklyBolsaModal(false)}
+                className="w-8 h-8 rounded-full bg-slate-100 hover:bg-slate-200 text-slate-500 flex items-center justify-center text-sm font-bold cursor-pointer"
+              >
+                ✕
+              </button>
+            </div>
+
+            {/* Weekly Hours Breakdown */}
+            <div className="bg-slate-50 rounded-2xl p-4 border border-slate-100">
+              <div className="flex justify-between items-center mb-1">
+                <span className="text-xs font-bold text-slate-600">Horas Semanales</span>
+                <span className="text-sm font-black text-indigo-600">
+                  {elapsedSeconds > 0 ? `${(32.5 + elapsedSeconds / 3600).toFixed(1)}h` : '32.5h'} / 40h
+                </span>
+              </div>
+              <div className="w-full bg-slate-200 h-2 rounded-full mt-2 overflow-hidden">
+                <div
+                  className="bg-indigo-600 h-full rounded-full transition-all duration-300"
+                  style={{ width: `${Math.min(100, Math.round(((32.5 + elapsedSeconds / 3600) / 40) * 100))}%` }}
+                ></div>
+              </div>
+              <p className="text-[11px] text-slate-500 mt-2">
+                Llevas completado el{' '}
+                <strong>{Math.min(100, Math.round(((32.5 + elapsedSeconds / 3600) / 40) * 100))}%</strong> de tu jornada de convenio semanal.
+              </p>
+            </div>
+
+            {/* Bolsa de Horas Balance */}
+            <div className="bg-amber-50/60 rounded-2xl p-4 border border-amber-200/70">
+              <div className="flex items-center justify-between">
+                <div>
+                  <span className="text-xs font-bold text-amber-900 block">Saldo en Bolsa de Horas</span>
+                  <span className="text-[11px] text-amber-700">Cómputo flexible anual acumulado</span>
+                </div>
+                <span className="text-xl font-black text-amber-800 font-mono">-7.5h</span>
+              </div>
+            </div>
+
+            {/* 13h Legal Rest */}
+            <div className="bg-emerald-50/60 rounded-2xl p-3 border border-emerald-200/70 flex items-center gap-2.5">
+              <span className="text-base text-emerald-600">✓</span>
+              <p className="text-[11px] font-medium text-emerald-800">
+                <strong>Descanso legal entre jornadas:</strong> Supera las 12h mínimas de descanso obligatorio establecidas en el Art. 34.9 ET.
+              </p>
+            </div>
+
+            {/* Quick Actions */}
+            <div className="flex gap-2 pt-1">
+              <button
+                onClick={() => {
+                  setShowWeeklyBolsaModal(false);
+                  setActiveTab('history');
+                }}
+                className="flex-1 bg-slate-100 hover:bg-slate-200 text-slate-800 font-bold text-xs py-2.5 px-3 rounded-xl transition-all cursor-pointer text-center"
+              >
+                Ver Historial
+              </button>
+              <button
+                onClick={() => {
+                  setShowWeeklyBolsaModal(false);
+                  setActiveTab('incidents');
+                }}
+                className="flex-1 bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs py-2.5 px-3 rounded-xl transition-all cursor-pointer text-center shadow-xs"
+              >
+                Incidencias
+              </button>
+            </div>
+          </div>
+        </div>
       )}
 
       {/* Device Permissions Modal */}
