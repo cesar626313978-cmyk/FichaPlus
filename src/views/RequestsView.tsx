@@ -4,7 +4,7 @@ import { useAuth } from '../context/AuthContext';
 import { UserAvatar } from '../components/UserAvatar';
 
 export const RequestsView: React.FC = () => {
-  const { employees, timeOffRequests, addTimeOffRequest, approveTimeOffRequest, rejectTimeOffRequest } = useApp();
+  const { employees, timeOffRequests, addTimeOffRequest, approveTimeOffRequest, rejectTimeOffRequest, deleteTimeOffRequest } = useApp();
   const { profile } = useAuth();
   const isAdmin = profile.role === 'admin' || profile.role === 'manager';
 
@@ -13,18 +13,25 @@ export const RequestsView: React.FC = () => {
   const [endDate, setEndDate] = useState('');
   const [notes, setNotes] = useState('');
   const [submitSuccess, setSubmitSuccess] = useState(false);
-
-  const pendingRequests = timeOffRequests.filter((r) => r.status === 'PENDIENTE');
-  const myRequests = timeOffRequests.filter((r) => r.userId === profile.id);
-  const displayedHistory = isAdmin ? timeOffRequests : myRequests;
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   // Find employee custom vacation days configuration (default 30 días naturales)
   const currentEmp = employees.find(
     (e) =>
       e.id === profile.id ||
       (e.dni && profile.dni && e.dni.trim().toUpperCase() === profile.dni.trim().toUpperCase()) ||
-      (e.email && profile.email && e.email.trim().toLowerCase() === profile.email.trim().toLowerCase())
+      (e.email && profile.email && e.email.trim().toLowerCase() === profile.email.trim().toLowerCase()) ||
+      (e.fullName && profile.name && e.fullName.trim().toLowerCase() === profile.name.trim().toLowerCase())
   );
+
+  const pendingRequests = timeOffRequests.filter((r) => r.status === 'PENDIENTE');
+  const myRequests = timeOffRequests.filter(
+    (r) =>
+      r.userId === profile.id ||
+      (currentEmp?.id && r.userId === currentEmp.id) ||
+      (profile.name && r.userName && r.userName.trim().toLowerCase() === profile.name.trim().toLowerCase())
+  );
+  const displayedHistory = isAdmin ? timeOffRequests : myRequests;
   const totalAllocatedDays = currentEmp?.vacationDays ?? 30;
   const vacationType = currentEmp?.vacationDaysType ?? 'NATURALES';
   const vacationNotes = currentEmp?.vacationNotes;
@@ -36,28 +43,35 @@ export const RequestsView: React.FC = () => {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!startDate || !endDate) return;
+    if (!startDate || !endDate || isSubmitting) return;
 
     const start = new Date(startDate).getTime();
     const end = new Date(endDate).getTime();
     const diffDays = Math.max(1, Math.round((end - start) / (1000 * 60 * 60 * 24)) + 1);
 
-    await addTimeOffRequest({
-      userId: profile.id,
-      userName: profile.name,
-      department: profile.department,
-      leaveType,
-      startDate,
-      endDate,
-      daysCount: diffDays,
-      notes,
-    });
+    setIsSubmitting(true);
+    try {
+      await addTimeOffRequest({
+        userId: currentEmp?.id || profile.id,
+        userName: currentEmp?.fullName || profile.name,
+        department: currentEmp?.department || profile.department || 'General',
+        leaveType,
+        startDate,
+        endDate,
+        daysCount: diffDays,
+        notes: notes.trim(),
+      });
 
-    setSubmitSuccess(true);
-    setStartDate('');
-    setEndDate('');
-    setNotes('');
-    setTimeout(() => setSubmitSuccess(false), 3000);
+      setSubmitSuccess(true);
+      setStartDate('');
+      setEndDate('');
+      setNotes('');
+      setTimeout(() => setSubmitSuccess(false), 4000);
+    } catch (err) {
+      console.error('Error creating request:', err);
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   return (
@@ -261,39 +275,86 @@ export const RequestsView: React.FC = () => {
 
       {/* Past Requests List */}
       <section className="bg-white rounded-3xl p-6 sm:p-8 shadow-sm border border-slate-100">
-        <h2 className="font-bold text-lg text-slate-900 border-b border-slate-100 pb-3 mb-4">
-          {isAdmin ? 'Historial General de Solicitudes' : 'Historial de mis Solicitudes'}
-        </h2>
-
-        <div className="space-y-2.5">
-          {displayedHistory.map((req) => (
-            <div
-              key={req.id}
-              className="p-4 rounded-2xl border border-slate-100 bg-slate-50/50 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2 hover:bg-slate-50 transition-colors"
-            >
-              <div>
-                <p className="font-bold text-xs uppercase tracking-wider text-slate-800">
-                  {req.leaveType} {isAdmin ? `— ${req.userName}` : ''}
-                </p>
-                <p className="text-xs text-slate-500 mt-0.5 font-mono">
-                  {req.startDate} al {req.endDate} ({req.daysCount} días)
-                </p>
-              </div>
-
-              <span
-                className={`px-3 py-1 rounded-full font-bold text-[11px] uppercase tracking-wide ${
-                  req.status === 'APROBADO'
-                    ? 'bg-emerald-100 text-emerald-800'
-                    : req.status === 'PENDIENTE'
-                    ? 'bg-amber-100 text-amber-800'
-                    : 'bg-rose-100 text-rose-800'
-                }`}
-              >
-                {req.status}
-              </span>
-            </div>
-          ))}
+        <div className="flex items-center justify-between border-b border-slate-100 pb-3 mb-4">
+          <h2 className="font-bold text-lg text-slate-900">
+            {isAdmin ? 'Historial General de Solicitudes' : 'Historial de mis Solicitudes'}
+          </h2>
+          <span className="text-xs font-semibold text-slate-400">
+            {displayedHistory.length} {displayedHistory.length === 1 ? 'registro' : 'registros'}
+          </span>
         </div>
+
+        {displayedHistory.length === 0 ? (
+          <div className="py-12 px-4 text-center rounded-2xl bg-slate-50 border border-dashed border-slate-200">
+            <span className="text-3xl block mb-2">📋</span>
+            <p className="font-bold text-sm text-slate-700">Sin solicitudes registradas</p>
+            <p className="text-xs text-slate-400 mt-1 max-w-sm mx-auto">
+              Utiliza el formulario superior para registrar tus vacaciones, asuntos propios o permisos. Aparecerán aquí inmediatamente.
+            </p>
+          </div>
+        ) : (
+          <div className="space-y-3">
+            {displayedHistory.map((req) => (
+              <div
+                key={req.id}
+                className="p-4 rounded-2xl border border-slate-100 bg-slate-50/70 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 hover:bg-slate-50 transition-colors"
+              >
+                <div className="space-y-1">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <p className="font-bold text-sm text-slate-800">
+                      {req.leaveType} {isAdmin ? `— ${req.userName}` : ''}
+                    </p>
+                    <span className="bg-white px-2 py-0.5 rounded-md border border-slate-200 text-[10px] font-bold text-slate-500 font-mono">
+                      {req.daysCount} {req.daysCount === 1 ? 'día' : 'días'}
+                    </span>
+                  </div>
+                  <p className="text-xs text-slate-500 font-medium">
+                    📅 Del <span className="font-semibold text-slate-700">{req.startDate}</span> al <span className="font-semibold text-slate-700">{req.endDate}</span>
+                    {req.createdAt && <span className="text-slate-400 text-[11px]"> • Creada el {req.createdAt}</span>}
+                  </p>
+                  {req.notes && (
+                    <p className="text-xs text-slate-600 italic bg-white/80 px-2.5 py-1 rounded-lg border border-slate-100 max-w-xl">
+                      💬 "{req.notes}"
+                    </p>
+                  )}
+                  {req.reviewedBy && (
+                    <p className="text-[11px] text-slate-400">
+                      Revisado por: <span className="font-semibold text-slate-600">{req.reviewedBy}</span>
+                    </p>
+                  )}
+                </div>
+
+                <div className="flex items-center gap-2 self-end sm:self-center">
+                  <span
+                    className={`px-3 py-1 rounded-full font-bold text-[11px] uppercase tracking-wide ${
+                      req.status === 'APROBADO'
+                        ? 'bg-emerald-100 text-emerald-800'
+                        : req.status === 'PENDIENTE'
+                        ? 'bg-amber-100 text-amber-800'
+                        : 'bg-rose-100 text-rose-800'
+                    }`}
+                  >
+                    {req.status}
+                  </span>
+
+                  {(isAdmin || req.status === 'PENDIENTE') && (
+                    <button
+                      onClick={() => {
+                        if (window.confirm('¿Deseas eliminar o cancelar esta solicitud?')) {
+                          deleteTimeOffRequest(req.id);
+                        }
+                      }}
+                      title="Eliminar solicitud"
+                      className="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-colors cursor-pointer text-xs"
+                    >
+                      🗑️
+                    </button>
+                  )}
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
       </section>
     </div>
   );

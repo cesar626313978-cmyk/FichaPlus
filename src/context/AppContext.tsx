@@ -108,6 +108,7 @@ interface AppContextType {
   addTimeOffRequest: (req: Omit<TimeOffRequest, 'id' | 'createdAt' | 'status'>) => Promise<void>;
   approveTimeOffRequest: (id: string) => Promise<void>;
   rejectTimeOffRequest: (id: string) => Promise<void>;
+  deleteTimeOffRequest: (id: string) => Promise<void>;
   
   addIncident: (inc: Omit<Incident, 'id' | 'createdAt' | 'status'>) => Promise<void>;
   approveIncident: (id: string) => Promise<void>;
@@ -381,26 +382,134 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     } catch {}
   };
 
-  const [currentShiftNumber, setCurrentShiftNumber] = useState<1 | 2>(1);
-  const [shift1, setShift1] = useState<ShiftDetail>({
-    shiftNumber: 1,
-    shiftName: 'Turno 1 (Mañana)',
-    elapsedSeconds: 0,
-    status: 'pending',
-  });
-  const [shift2, setShift2] = useState<ShiftDetail>({
-    shiftNumber: 2,
-    shiftName: 'Turno 2 (Tarde)',
-    elapsedSeconds: 0,
-    status: 'pending',
-  });
-  const [pauseReason, setPauseReason] = useState<string>('Pausa');
+  // Anti-mock legacy prototype filters (strictly targets old hardcoded prototype sample IDs like req-1, entry-1, demo, etc. Never targets real timestamped or uuid records)
+  const isMockEntryId = (id?: string) => {
+    if (!id) return true;
+    if (/^entry-[0-9]{1,2}$/.test(id)) return true;
+    if (id.includes('demo') || id.includes('mock') || id.includes('sample')) return true;
+    return false;
+  };
+  const isMockRequestId = (id?: string) => {
+    if (!id) return true;
+    if (/^req-[0-9]{1,2}$/.test(id)) return true;
+    if (id.includes('demo') || id.includes('mock') || id.includes('sample')) return true;
+    return false;
+  };
+  const isMockIncidentId = (id?: string) => {
+    if (!id) return true;
+    if (/^inc-[0-9]{1,2}$/.test(id)) return true;
+    if (id.includes('demo') || id.includes('mock') || id.includes('sample')) return true;
+    return false;
+  };
+  const isMockAuditId = (id?: string) => {
+    if (!id) return true;
+    if (/^audit-[0-9]{1,2}$/.test(id)) return true;
+    if (id.includes('demo') || id.includes('mock')) return true;
+    return false;
+  };
+  const isMockNotifId = (id?: string) => {
+    if (!id) return true;
+    if (/^notif-[0-9]{1,2}$/.test(id)) return true;
+    if (id.includes('demo') || id.includes('mock')) return true;
+    return false;
+  };
 
-  const [isClockedIn, setIsClockedIn] = useState(false);
-  const [isPaused, setIsPaused] = useState(false);
-  const [clockInTime, setClockInTime] = useState<string | null>(null);
-  const [elapsedSeconds, setElapsedSeconds] = useState(0);
-  const [workType, setWorkType] = useState<'presencial' | 'teletrabajo' | 'cliente'>('presencial');
+  const getStoredPunchState = (userId?: string) => {
+    if (typeof window === 'undefined' || !window.localStorage) return null;
+    try {
+      const keys = [
+        userId ? `fichaplus_punch_${userId}` : null,
+        'fichaplus_active_punch_state',
+      ].filter(Boolean) as string[];
+
+      for (const k of keys) {
+        const saved = localStorage.getItem(k);
+        if (saved) {
+          const parsed = JSON.parse(saved);
+          if (parsed && parsed.isClockedIn && parsed.clockInTimestamp) {
+            const ageHours = (Date.now() - parsed.clockInTimestamp) / (1000 * 3600);
+            if (ageHours < 24) {
+              return parsed;
+            }
+          }
+        }
+      }
+    } catch {}
+    return null;
+  };
+
+  const initialPunch = useMemo(() => {
+    return getStoredPunchState(profile?.id);
+  }, [profile?.id]);
+
+  const [clockInTimestamp, setClockInTimestamp] = useState<number | null>(() => {
+    return initialPunch?.clockInTimestamp || null;
+  });
+  const [pausedAtTimestamp, setPausedAtTimestamp] = useState<number | null>(() => {
+    return initialPunch?.pausedAtTimestamp || null;
+  });
+  const [accumulatedPauseSeconds, setAccumulatedPauseSeconds] = useState<number>(() => {
+    return initialPunch?.accumulatedPauseSeconds || 0;
+  });
+  const [activeEntryId, setActiveEntryId] = useState<string | null>(() => {
+    return initialPunch?.activeEntryId || null;
+  });
+
+  const [currentShiftNumber, setCurrentShiftNumber] = useState<1 | 2>(() => {
+    return initialPunch?.currentShiftNumber || 1;
+  });
+  const [shift1, setShift1] = useState<ShiftDetail>(() => {
+    return (
+      initialPunch?.shift1 || {
+        shiftNumber: 1,
+        shiftName: 'Turno 1 (Mañana)',
+        elapsedSeconds: 0,
+        status: 'pending',
+      }
+    );
+  });
+  const [shift2, setShift2] = useState<ShiftDetail>(() => {
+    return (
+      initialPunch?.shift2 || {
+        shiftNumber: 2,
+        shiftName: 'Turno 2 (Tarde)',
+        elapsedSeconds: 0,
+        status: 'pending',
+      }
+    );
+  });
+  const [pauseReason, setPauseReason] = useState<string>(() => {
+    return initialPunch?.pauseReason || 'Pausa';
+  });
+
+  const [isClockedIn, setIsClockedIn] = useState<boolean>(() => {
+    return !!initialPunch?.isClockedIn;
+  });
+  const [isPaused, setIsPaused] = useState<boolean>(() => {
+    return !!initialPunch?.isPaused;
+  });
+  const [clockInTime, setClockInTime] = useState<string | null>(() => {
+    return initialPunch?.clockInTime || null;
+  });
+  const [workType, setWorkType] = useState<'presencial' | 'teletrabajo' | 'cliente'>(() => {
+    return initialPunch?.workType || 'presencial';
+  });
+
+  const [elapsedSeconds, setElapsedSeconds] = useState<number>(() => {
+    if (!initialPunch || !initialPunch.clockInTimestamp) return 0;
+    if (initialPunch.isPaused && initialPunch.pausedAtTimestamp) {
+      return Math.max(
+        0,
+        Math.floor((initialPunch.pausedAtTimestamp - initialPunch.clockInTimestamp) / 1000) -
+          (initialPunch.accumulatedPauseSeconds || 0)
+      );
+    }
+    return Math.max(
+      0,
+      Math.floor((Date.now() - initialPunch.clockInTimestamp) / 1000) -
+        (initialPunch.accumulatedPauseSeconds || 0)
+    );
+  });
 
   // Keep workType synchronized with the employee's authorized modalities
   useEffect(() => {
@@ -417,13 +526,6 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     shift1.status === 'completed' &&
     shift2.status === 'pending' &&
     !isClockedIn;
-
-  // Anti-mock legacy filters
-  const isMockEntryId = (id?: string) => !id || id.startsWith('entry-');
-  const isMockRequestId = (id?: string) => !id || id.startsWith('req-');
-  const isMockIncidentId = (id?: string) => !id || id.startsWith('inc-');
-  const isMockAuditId = (id?: string) => !id || id.startsWith('audit-1') || id.startsWith('audit-2') || id.startsWith('audit-3');
-  const isMockNotifId = (id?: string) => !id || id.startsWith('notif-1') || id.startsWith('notif-2') || id.startsWith('notif-3') || id.startsWith('notif-4');
 
   // Lists - persistent and clean
   const [timeEntries, setTimeEntries] = useState<TimeEntry[]>(() => {
@@ -718,16 +820,140 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }
   };
 
-  // Live Timer when clocked in
+  // Sync punch state when user profile changes
   useEffect(() => {
-    let interval: any;
-    if (isClockedIn && !isPaused) {
-      interval = setInterval(() => {
-        setElapsedSeconds((prev) => prev + 1);
-      }, 1000);
+    if (!profile?.id) return;
+    const userPunch = getStoredPunchState(profile.id);
+    if (userPunch && userPunch.isClockedIn) {
+      setIsClockedIn(true);
+      setIsPaused(!!userPunch.isPaused);
+      setClockInTime(userPunch.clockInTime);
+      setClockInTimestamp(userPunch.clockInTimestamp);
+      setPausedAtTimestamp(userPunch.pausedAtTimestamp || null);
+      setAccumulatedPauseSeconds(userPunch.accumulatedPauseSeconds || 0);
+      setActiveEntryId(userPunch.activeEntryId || null);
+      setCurrentShiftNumber(userPunch.currentShiftNumber || 1);
+      setWorkType(userPunch.workType || 'presencial');
+      setPauseReason(userPunch.pauseReason || 'Pausa');
+      if (userPunch.shift1) setShift1(userPunch.shift1);
+      if (userPunch.shift2) setShift2(userPunch.shift2);
+      if (userPunch.isPaused && userPunch.pausedAtTimestamp) {
+        setElapsedSeconds(
+          Math.max(
+            0,
+            Math.floor((userPunch.pausedAtTimestamp - userPunch.clockInTimestamp) / 1000) -
+              (userPunch.accumulatedPauseSeconds || 0)
+          )
+        );
+      } else {
+        setElapsedSeconds(
+          Math.max(
+            0,
+            Math.floor((Date.now() - userPunch.clockInTimestamp) / 1000) -
+              (userPunch.accumulatedPauseSeconds || 0)
+          )
+        );
+      }
     }
-    return () => clearInterval(interval);
-  }, [isClockedIn, isPaused]);
+  }, [profile?.id]);
+
+  // Persistent sync of active punch state to localStorage
+  useEffect(() => {
+    const currentUserId = profile?.id || currentEmployee?.id || 'emp-001';
+    if (isClockedIn && clockInTimestamp) {
+      const punchState = {
+        userId: currentUserId,
+        isClockedIn,
+        isPaused,
+        clockInTime: clockInTime || '',
+        clockInTimestamp,
+        currentShiftNumber,
+        workdayPlan,
+        workType,
+        pausedAtTimestamp,
+        accumulatedPauseSeconds,
+        pauseReason,
+        date: new Date(clockInTimestamp).toISOString().slice(0, 10),
+        activeEntryId: activeEntryId || '',
+        shift1,
+        shift2,
+      };
+      try {
+        localStorage.setItem(`fichaplus_punch_${currentUserId}`, JSON.stringify(punchState));
+        localStorage.setItem('fichaplus_active_punch_state', JSON.stringify(punchState));
+      } catch {}
+    } else if (!isClockedIn) {
+      try {
+        localStorage.removeItem(`fichaplus_punch_${currentUserId}`);
+        localStorage.removeItem('fichaplus_active_punch_state');
+      } catch {}
+    }
+  }, [
+    isClockedIn,
+    isPaused,
+    clockInTime,
+    clockInTimestamp,
+    pausedAtTimestamp,
+    accumulatedPauseSeconds,
+    currentShiftNumber,
+    workdayPlan,
+    workType,
+    pauseReason,
+    activeEntryId,
+    shift1,
+    shift2,
+    profile?.id,
+    currentEmployee?.id,
+  ]);
+
+  // Live Timer when clocked in - timestamp-accurate and resilient to app closure, phone sleep or tab backgrounding
+  useEffect(() => {
+    if (!isClockedIn || !clockInTimestamp) {
+      return;
+    }
+
+    const calculateActiveSeconds = () => {
+      if (isPaused) {
+        if (pausedAtTimestamp) {
+          const totalSecs = Math.max(
+            0,
+            Math.floor((pausedAtTimestamp - clockInTimestamp) / 1000) - accumulatedPauseSeconds
+          );
+          setElapsedSeconds(totalSecs);
+        }
+      } else {
+        const now = Date.now();
+        const totalSecs = Math.max(
+          0,
+          Math.floor((now - clockInTimestamp) / 1000) - accumulatedPauseSeconds
+        );
+        setElapsedSeconds(totalSecs);
+      }
+    };
+
+    calculateActiveSeconds();
+
+    const interval = setInterval(calculateActiveSeconds, 1000);
+
+    const handleVisibilityOrFocus = () => {
+      if (typeof document !== 'undefined' && document.visibilityState === 'visible') {
+        calculateActiveSeconds();
+      }
+    };
+
+    if (typeof document !== 'undefined') {
+      document.addEventListener('visibilitychange', handleVisibilityOrFocus);
+      window.addEventListener('focus', handleVisibilityOrFocus);
+    }
+
+    return () => {
+      clearInterval(interval);
+      if (typeof document !== 'undefined') {
+        document.removeEventListener('visibilitychange', handleVisibilityOrFocus);
+        window.removeEventListener('focus', handleVisibilityOrFocus);
+      }
+    };
+  }, [isClockedIn, isPaused, clockInTimestamp, pausedAtTimestamp, accumulatedPauseSeconds]);
 
   const [isCloudConnected, setIsCloudConnected] = useState<boolean>(true);
   const [isSyncingCloud, setIsSyncingCloud] = useState<boolean>(false);
@@ -1138,32 +1364,68 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const startWorkday = async (shiftNum?: 1 | 2) => {
     const targetShift = shiftNum || (workdayPlan === 'partida' && shift1.status === 'completed' ? 2 : 1);
     const now = new Date();
+    const nowTimestamp = now.getTime();
     const timeStr = now.toTimeString().slice(0, 8);
     const timeShort = timeStr.slice(0, 5);
     const dateStr = now.toISOString().slice(0, 10);
     const dayLabel = `${dateStr} (${['Dom','Lun','Mar','Mié','Jue','Vie','Sáb'][now.getDay()]})`;
 
+    const entryId = activeEntryId || `entry-${nowTimestamp}-${Math.random().toString(36).slice(2, 6)}`;
+    setActiveEntryId(entryId);
+    setClockInTimestamp(nowTimestamp);
+    setPausedAtTimestamp(null);
+    setAccumulatedPauseSeconds(0);
     setIsClockedIn(true);
     setIsPaused(false);
     setClockInTime(timeShort);
+    setElapsedSeconds(0);
     setCurrentShiftNumber(targetShift);
+
+    let updatedShift1 = { ...shift1 };
+    let updatedShift2 = { ...shift2 };
 
     // Update shift details
     if (targetShift === 1) {
-      setShift1((prev) => ({
-        ...prev,
+      updatedShift1 = {
+        ...shift1,
         clockIn: timeShort,
         status: 'active',
         workType,
-      }));
+      };
+      setShift1(updatedShift1);
     } else {
-      setShift2((prev) => ({
-        ...prev,
+      updatedShift2 = {
+        ...shift2,
         clockIn: timeShort,
         status: 'active',
         workType,
-      }));
+      };
+      setShift2(updatedShift2);
     }
+
+    // Save punch state to localStorage immediately so no crash or close can erase it
+    const currentUserId = profile?.id || currentEmployee?.id || 'emp-001';
+    const immediatePunch = {
+      userId: currentUserId,
+      isClockedIn: true,
+      isPaused: false,
+      clockInTime: timeShort,
+      clockInTimestamp: nowTimestamp,
+      currentShiftNumber: targetShift,
+      workdayPlan,
+      workType,
+      pausedAtTimestamp: null,
+      accumulatedPauseSeconds: 0,
+      pauseReason: 'Pausa',
+      date: dateStr,
+      activeEntryId: entryId,
+      shift1: updatedShift1,
+      shift2: updatedShift2,
+    };
+    try {
+      localStorage.setItem(`fichaplus_punch_${currentUserId}`, JSON.stringify(immediatePunch));
+      localStorage.setItem('fichaplus_active_punch_state', JSON.stringify(immediatePunch));
+    } catch {}
 
     // 1. Hardware triggers
     triggerHaptic('clockIn');
@@ -1203,9 +1465,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
     if (targetShift === 1 || workdayPlan === 'continua') {
       const newEntry: TimeEntry = {
-        id: `entry-${Date.now()}`,
-        userId: profile.id,
-        userName: profile.name,
+        id: entryId,
+        userId: currentEmployee?.id || profile.id,
+        userName: currentEmployee?.fullName || profile.name,
         date: dayLabel,
         clockIn: timeShort,
         breakDurationMinutes: 0,
@@ -1217,32 +1479,46 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         isComplete: false,
       };
 
-      setTimeEntries((prev) => [newEntry, ...prev]);
-
+      setTimeEntries((prev) => [newEntry, ...prev.filter((e) => e.id !== entryId)]);
       try {
-        await addDoc(collection(db, 'time_entries'), newEntry);
-      } catch (e) {
-        console.warn('Saved entry locally');
-      }
+        const saved = localStorage.getItem('fichaplus_time_entries');
+        const list = saved ? JSON.parse(saved) : [];
+        localStorage.setItem('fichaplus_time_entries', JSON.stringify([newEntry, ...list.filter((e: any) => e.id !== entryId)]));
+      } catch {}
+
+      await safeFirestoreWrite(setDoc(doc(db, 'time_entries', entryId), newEntry), 800);
     } else {
-      setTimeEntries((prev) =>
-        prev.map((item, idx) =>
-          idx === 0
+      setTimeEntries((prev) => {
+        const updated = prev.map((item, idx) =>
+          idx === 0 || item.id === entryId
             ? {
                 ...item,
                 shift2ClockIn: timeShort,
                 isComplete: false,
               }
             : item
-        )
-      );
+        );
+        try {
+          localStorage.setItem('fichaplus_time_entries', JSON.stringify(updated));
+        } catch {}
+        return updated;
+      });
+
+      if (entryId) {
+        await safeFirestoreWrite(
+          setDoc(doc(db, 'time_entries', entryId), { shift2ClockIn: timeShort, isComplete: false }, { merge: true }),
+          800
+        );
+      }
     }
   };
 
   const pauseWorkday = async (reason?: string, notes?: string) => {
     const finalReason = reason || 'Pausa';
+    const now = Date.now();
     setPauseReason(finalReason);
     setIsPaused(true);
+    setPausedAtTimestamp(now);
     triggerHaptic('pause');
     playDeviceChime('pause');
 
@@ -1259,6 +1535,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
 
   const resumeWorkday = async () => {
+    const now = Date.now();
+    const pauseDuration = pausedAtTimestamp ? Math.max(0, Math.floor((now - pausedAtTimestamp) / 1000)) : 0;
+    setAccumulatedPauseSeconds((prev) => prev + pauseDuration);
+    setPausedAtTimestamp(null);
     setIsPaused(false);
     triggerHaptic('clockIn');
     playDeviceChime('clockIn');
@@ -1280,11 +1560,23 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     const now = new Date();
     const timeShort = now.toTimeString().slice(0, 5);
     const durationHours = parseFloat((elapsedSeconds / 3600).toFixed(1));
+    const finalActiveEntryId = activeEntryId;
 
     setIsClockedIn(false);
     setIsPaused(false);
+    setClockInTimestamp(null);
+    setPausedAtTimestamp(null);
+    setAccumulatedPauseSeconds(0);
+    setActiveEntryId(null);
     triggerHaptic('clockOut');
     playDeviceChime('clockOut');
+
+    // Clean active punch state from localStorage immediately
+    const currentUserId = profile?.id || currentEmployee?.id || 'emp-001';
+    try {
+      localStorage.removeItem(`fichaplus_punch_${currentUserId}`);
+      localStorage.removeItem('fichaplus_active_punch_state');
+    } catch {}
 
     if (workdayPlan === 'partida' && targetShift === 1) {
       // Shift 1 finished -> Go to between shifts
@@ -1303,9 +1595,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         `Primer turno finalizado a las ${timeShort}. Podrás iniciar el Turno 2 (Tarde) al volver de la comida.`
       );
 
-      setTimeEntries((prev) =>
-        prev.map((item, idx) =>
-          idx === 0
+      setTimeEntries((prev) => {
+        const updated = prev.map((item, idx) =>
+          idx === 0 || (finalActiveEntryId && item.id === finalActiveEntryId)
             ? {
                 ...item,
                 shift1ClockOut: timeShort,
@@ -1313,8 +1605,27 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
                 totalHoursWorked: durationHours || 4.5,
               }
             : item
-        )
-      );
+        );
+        try {
+          localStorage.setItem('fichaplus_time_entries', JSON.stringify(updated));
+        } catch {}
+        return updated;
+      });
+
+      if (finalActiveEntryId) {
+        await safeFirestoreWrite(
+          setDoc(
+            doc(db, 'time_entries', finalActiveEntryId),
+            {
+              shift1ClockOut: timeShort,
+              shift1DurationHours: durationHours || 4.5,
+              totalHoursWorked: durationHours || 4.5,
+            },
+            { merge: true }
+          ),
+          800
+        );
+      }
     } else {
       // Shift 2 or Continuous Shift completed
       if (workdayPlan === 'partida') {
@@ -1334,9 +1645,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         `Jornada finalizada a las ${timeShort}. Total trabajado: ${totalDayHours || 8.0}h.`
       );
 
-      setTimeEntries((prev) =>
-        prev.map((item, idx) =>
-          idx === 0
+      setTimeEntries((prev) => {
+        const updated = prev.map((item, idx) =>
+          idx === 0 || (finalActiveEntryId && item.id === finalActiveEntryId)
             ? {
                 ...item,
                 clockOut: timeShort,
@@ -1346,8 +1657,29 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
                 isComplete: true,
               }
             : item
-        )
-      );
+        );
+        try {
+          localStorage.setItem('fichaplus_time_entries', JSON.stringify(updated));
+        } catch {}
+        return updated;
+      });
+
+      if (finalActiveEntryId) {
+        await safeFirestoreWrite(
+          setDoc(
+            doc(db, 'time_entries', finalActiveEntryId),
+            {
+              clockOut: timeShort,
+              shift2ClockOut: workdayPlan === 'partida' ? timeShort : undefined,
+              shift2DurationHours: workdayPlan === 'partida' ? durationHours : undefined,
+              totalHoursWorked: totalDayHours || 8.0,
+              isComplete: true,
+            },
+            { merge: true }
+          ),
+          800
+        );
+      }
     }
   };
 
@@ -1355,6 +1687,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     setIsClockedIn(false);
     setIsPaused(false);
     setClockInTime(null);
+    setClockInTimestamp(null);
+    setPausedAtTimestamp(null);
+    setAccumulatedPauseSeconds(0);
+    setActiveEntryId(null);
     setElapsedSeconds(0);
     setCurrentShiftNumber(1);
     setShift1({
@@ -1369,28 +1705,50 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       elapsedSeconds: 0,
       status: 'pending',
     });
+    const currentUserId = profile?.id || currentEmployee?.id || 'emp-001';
+    try {
+      localStorage.removeItem(`fichaplus_punch_${currentUserId}`);
+      localStorage.removeItem('fichaplus_active_punch_state');
+    } catch {}
   };
 
   const addTimeOffRequest = async (req: Omit<TimeOffRequest, 'id' | 'createdAt' | 'status'>) => {
+    const id = `req-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
     const newReq: TimeOffRequest = {
       ...req,
-      id: `req-${Date.now()}`,
+      id,
       status: 'PENDIENTE',
       createdAt: new Date().toISOString().slice(0, 10),
     };
-    setTimeOffRequests((prev) => [newReq, ...prev]);
-    await safeFirestoreWrite(addDoc(collection(db, 'time_off_requests'), newReq), 800);
+    setTimeOffRequests((prev) => [newReq, ...prev.filter((r) => r.id !== id)]);
+    try {
+      const saved = localStorage.getItem('fichaplus_requests');
+      const list = saved ? JSON.parse(saved) : [];
+      localStorage.setItem('fichaplus_requests', JSON.stringify([newReq, ...list.filter((x: any) => x.id !== id)]));
+    } catch {}
+    await safeFirestoreWrite(setDoc(doc(db, 'time_off_requests', id), newReq), 800);
   };
 
   const approveTimeOffRequest = async (id: string) => {
     setTimeOffRequests((prev) =>
       prev.map((r) => (r.id === id ? { ...r, status: 'APROBADO', reviewedBy: profile.name } : r))
     );
+    try {
+      const saved = localStorage.getItem('fichaplus_requests');
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed)) {
+          localStorage.setItem(
+            'fichaplus_requests',
+            JSON.stringify(
+              parsed.map((r: any) => (r.id === id ? { ...r, status: 'APROBADO', reviewedBy: profile.name } : r))
+            )
+          );
+        }
+      }
+    } catch {}
     await safeFirestoreWrite(
-      updateDoc(doc(db, 'time_off_requests', id), {
-        status: 'APROBADO',
-        reviewedBy: profile.name,
-      }),
+      setDoc(doc(db, 'time_off_requests', id), { status: 'APROBADO', reviewedBy: profile.name }, { merge: true }),
       800
     );
   };
@@ -1399,24 +1757,55 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     setTimeOffRequests((prev) =>
       prev.map((r) => (r.id === id ? { ...r, status: 'RECHAZADO', reviewedBy: profile.name } : r))
     );
+    try {
+      const saved = localStorage.getItem('fichaplus_requests');
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed)) {
+          localStorage.setItem(
+            'fichaplus_requests',
+            JSON.stringify(
+              parsed.map((r: any) => (r.id === id ? { ...r, status: 'RECHAZADO', reviewedBy: profile.name } : r))
+            )
+          );
+        }
+      }
+    } catch {}
     await safeFirestoreWrite(
-      updateDoc(doc(db, 'time_off_requests', id), {
-        status: 'RECHAZADO',
-        reviewedBy: profile.name,
-      }),
+      setDoc(doc(db, 'time_off_requests', id), { status: 'RECHAZADO', reviewedBy: profile.name }, { merge: true }),
       800
     );
   };
 
+  const deleteTimeOffRequest = async (id: string) => {
+    setTimeOffRequests((prev) => prev.filter((r) => r.id !== id));
+    try {
+      const saved = localStorage.getItem('fichaplus_requests');
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed)) {
+          localStorage.setItem('fichaplus_requests', JSON.stringify(parsed.filter((r: any) => r.id !== id)));
+        }
+      }
+    } catch {}
+    await safeFirestoreWrite(deleteDoc(doc(db, 'time_off_requests', id)), 800);
+  };
+
   const addIncident = async (inc: Omit<Incident, 'id' | 'createdAt' | 'status'>) => {
+    const id = `inc-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
     const newInc: Incident = {
       ...inc,
-      id: `inc-${Date.now()}`,
+      id,
       status: 'PENDIENTE',
       createdAt: 'Hoy',
     };
-    setIncidents((prev) => [newInc, ...prev]);
-    await safeFirestoreWrite(addDoc(collection(db, 'incidents'), newInc), 800);
+    setIncidents((prev) => [newInc, ...prev.filter((i) => i.id !== id)]);
+    try {
+      const saved = localStorage.getItem('fichaplus_incidents');
+      const list = saved ? JSON.parse(saved) : [];
+      localStorage.setItem('fichaplus_incidents', JSON.stringify([newInc, ...list.filter((x: any) => x.id !== id)]));
+    } catch {}
+    await safeFirestoreWrite(setDoc(doc(db, 'incidents', id), newInc), 800);
   };
 
   const approveIncident = async (id: string) => {
@@ -1826,8 +2215,15 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     setIsClockedIn(false);
     setIsPaused(false);
     setClockInTime(null);
+    setClockInTimestamp(null);
+    setPausedAtTimestamp(null);
+    setAccumulatedPauseSeconds(0);
+    setActiveEntryId(null);
     setElapsedSeconds(0);
     localStorage.removeItem('fichaplus_punch_state');
+    localStorage.removeItem('fichaplus_active_punch_state');
+    const currentUserId = profile?.id || currentEmployee?.id || 'emp-001';
+    localStorage.removeItem(`fichaplus_punch_${currentUserId}`);
 
     // 4. Reset Monthly Record
     const primaryEmployee = activeEmployeesList[0];
@@ -1995,6 +2391,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         addTimeOffRequest,
         approveTimeOffRequest,
         rejectTimeOffRequest,
+        deleteTimeOffRequest,
         addIncident,
         approveIncident,
         rejectIncident,
