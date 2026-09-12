@@ -63,6 +63,58 @@ export const DashboardView: React.FC = () => {
   // Weekly & Hour Bank Details Modal State
   const [showWeeklyBolsaModal, setShowWeeklyBolsaModal] = useState(false);
 
+  // Active employee record resolution matching RequestsView exactly
+  const activeEmp = useMemo(() => {
+    return (
+      employees.find(
+        (e) =>
+          e.id === profile.id ||
+          (e.dni && profile.dni && e.dni.trim().toUpperCase() === profile.dni.trim().toUpperCase()) ||
+          (e.email && profile.email && e.email.trim().toLowerCase() === profile.email.trim().toLowerCase()) ||
+          (e.fullName && profile.name && e.fullName.trim().toLowerCase() === profile.name.trim().toLowerCase())
+      ) || currentEmployee
+    );
+  }, [employees, profile, currentEmployee]);
+
+  // Dynamic vacation stats for active employee (synchronizes with RequestsView 32 days calculation)
+  const employeeVacationStats = useMemo(() => {
+    const totalAllocatedDays = activeEmp?.vacationDays ?? 30;
+    const vacationType = activeEmp?.vacationDaysType ?? 'NATURALES';
+    const vacationNotes = activeEmp?.vacationNotes;
+
+    const myVacationRequests = timeOffRequests.filter(
+      (r) =>
+        r.userId === profile.id ||
+        (activeEmp?.id && r.userId === activeEmp.id) ||
+        (profile.name && r.userName && r.userName.trim().toLowerCase() === profile.name.trim().toLowerCase())
+    );
+
+    const usedDays = myVacationRequests
+      .filter((r) => r.leaveType === 'Vacaciones' && r.status === 'APROBADO')
+      .reduce((sum, r) => sum + (r.daysCount || 1), 0);
+
+    const availableDays = Math.max(0, totalAllocatedDays - usedDays);
+
+    return {
+      availableDays,
+      totalAllocatedDays,
+      vacationType,
+      vacationNotes,
+      usedDays,
+    };
+  }, [activeEmp, profile, timeOffRequests]);
+
+  // Open incidents count for this user
+  const myOpenIncidentsCount = useMemo(() => {
+    return incidents.filter(
+      (i) =>
+        (i.userId === profile.id ||
+          (activeEmp?.id && i.userId === activeEmp.id) ||
+          (profile.name && i.userName && i.userName.trim().toLowerCase() === profile.name.trim().toLowerCase())) &&
+        i.status === 'PENDIENTE'
+    ).length;
+  }, [incidents, profile, activeEmp]);
+
   // Filtered allowed work location options for the active employee
   const employeeAllowedLocations = useMemo<('presencial' | 'teletrabajo' | 'cliente')[]>(() => {
     const raw = currentEmployee?.allowedWorkLocations;
@@ -429,19 +481,19 @@ export const DashboardView: React.FC = () => {
               type="button"
               onClick={() => setActiveTab('requests')}
               className="bg-slate-50 hover:bg-pink-50 border border-slate-200/80 text-slate-700 hover:text-pink-700 py-1.5 px-1 rounded-xl text-[10px] sm:text-[11px] font-bold flex items-center justify-center gap-1 transition-all cursor-pointer truncate shadow-2xs"
-              title="Vacaciones disponibles (15 días restantes)"
+              title={`Vacaciones disponibles (${employeeVacationStats.availableDays} días restantes)`}
             >
               <span>🏖️</span>
-              <span className="truncate">15d Vacac.</span>
+              <span className="truncate">{employeeVacationStats.availableDays}d Vacac.</span>
             </button>
             <button
               type="button"
               onClick={() => setActiveTab('incidents')}
               className="bg-slate-50 hover:bg-amber-50 border border-slate-200/80 text-slate-700 hover:text-amber-700 py-1.5 px-1 rounded-xl text-[10px] sm:text-[11px] font-bold flex items-center justify-center gap-1 transition-all cursor-pointer truncate shadow-2xs"
-              title="Incidencias y regularizaciones de fichaje"
+              title={`Incidencias y regularizaciones (${myOpenIncidentsCount} abiertas)`}
             >
               <span>📝</span>
-              <span className="truncate">0 Incidenc.</span>
+              <span className="truncate">{myOpenIncidentsCount} Incidenc.</span>
             </button>
           </div>
         </section>
@@ -900,13 +952,23 @@ export const DashboardView: React.FC = () => {
                     🏖️
                   </span>
                 </div>
-                <div className="flex items-baseline gap-1 mb-2">
-                  <span className="text-3xl font-black text-slate-900">15</span>
-                  <span className="text-sm font-semibold text-slate-400">días restantes</span>
+                <div className="flex items-baseline gap-1 mb-1">
+                  <span className="text-3xl font-black text-slate-900">{employeeVacationStats.availableDays}</span>
+                  <span className="text-sm font-semibold text-slate-400">
+                    de {employeeVacationStats.totalAllocatedDays} días {employeeVacationStats.vacationType === 'LABORABLES' ? 'laborables' : 'naturales'}
+                  </span>
                 </div>
                 <p className="text-xs text-slate-500">
-                  De 22 días laborables anuales correspondientes al ejercicio 2026.
+                  {employeeVacationStats.usedDays > 0
+                    ? `${employeeVacationStats.usedDays} días disfrutados/aprobados del ejercicio 2026.`
+                    : 'Sin días disfrutados todavía del ejercicio 2026.'}
                 </p>
+                {employeeVacationStats.vacationNotes && (
+                  <div className="mt-2.5 inline-flex items-center gap-1 bg-amber-50 border border-amber-200/60 rounded-xl px-2.5 py-1 text-[11px] font-semibold text-amber-800">
+                    <span>📌</span>
+                    <span>{employeeVacationStats.vacationNotes}</span>
+                  </div>
+                )}
               </div>
               <button
                 onClick={() => setActiveTab('requests')}
@@ -928,11 +990,13 @@ export const DashboardView: React.FC = () => {
                   </span>
                 </div>
                 <div className="flex items-baseline gap-1 mb-2">
-                  <span className="text-3xl font-black text-slate-900">0</span>
+                  <span className="text-3xl font-black text-slate-900">{myOpenIncidentsCount}</span>
                   <span className="text-sm font-semibold text-slate-400">incidencias abiertas</span>
                 </div>
                 <p className="text-xs text-slate-500">
-                  Tu registro horario no presenta discrepancias pendientes de subsanar.
+                  {myOpenIncidentsCount > 0
+                    ? `Tienes ${myOpenIncidentsCount} incidencia(s) pendiente(s) de revisión o resolución.`
+                    : 'Tu registro horario no presenta discrepancias pendientes de subsanar.'}
                 </p>
               </div>
               <button
