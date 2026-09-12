@@ -58,10 +58,10 @@ export const BottomNav: React.FC = () => {
           <button
             key={item.id}
             onClick={() => {
-              if (isSwitch && item.targetRole) {
+              if (isSwitch && item.targetRole && isActualAdmin) {
                 switchRole(item.targetRole);
                 setActiveTab('dashboard');
-              } else {
+              } else if (!isSwitch) {
                 setActiveTab(item.id);
               }
             }}

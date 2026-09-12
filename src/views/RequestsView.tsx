@@ -66,6 +66,12 @@ export const RequestsView: React.FC = () => {
   useEffect(() => {
     if (vacationPlanningEmployeeId) {
       setSelectedEmployeeId(vacationPlanningEmployeeId);
+      setTimeout(() => {
+        const el = document.getElementById('vacation-planning-form');
+        if (el) {
+          el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        }
+      }, 100);
     }
   }, [vacationPlanningEmployeeId]);
 
@@ -304,7 +310,7 @@ export const RequestsView: React.FC = () => {
         </section>
 
         {/* New Request / Planning Form */}
-        <section className="md:col-span-2 bg-white rounded-3xl p-6 sm:p-8 shadow-sm border border-slate-100">
+        <section id="vacation-planning-form" className="md:col-span-2 bg-white rounded-3xl p-6 sm:p-8 shadow-sm border border-slate-100">
           <form onSubmit={handleSubmit} className="flex flex-col gap-4">
             <div className="flex items-center justify-between border-b border-slate-100 pb-3">
               <div>

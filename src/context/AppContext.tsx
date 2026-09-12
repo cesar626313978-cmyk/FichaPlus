@@ -719,7 +719,11 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       document.referrer.includes('android-app://');
 
     if (isStandalone) return true;
-    return localStorage.getItem('fichaplus_pwa_installed') === 'true';
+    // When inside a web browser, clean up stale flags so the install button remains accessible
+    try {
+      localStorage.removeItem('fichaplus_pwa_installed');
+    } catch {}
+    return false;
   });
 
   const [showInstallModal, setShowInstallModal] = useState(false);

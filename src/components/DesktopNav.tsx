@@ -14,7 +14,7 @@ interface NavItem {
 
 export const DesktopNav: React.FC = () => {
   const { activeTab, setActiveTab, timeEntries, monthlyRecord, employees } = useApp();
-  const { profile, switchRole, signOut } = useAuth();
+  const { profile, switchRole, signOut, isActualAdmin } = useAuth();
   const isAdmin = profile.role === 'admin' || profile.role === 'manager';
 
   const userEntriesForSign = (timeEntries || []).filter(
@@ -151,42 +151,44 @@ export const DesktopNav: React.FC = () => {
 
       {/* Role Switcher Demo Bar & Logout (Sticky at bottom) */}
       <div className="pt-4 border-t border-slate-100 mt-auto space-y-3">
-        <div>
-          <div className="flex items-center justify-between mb-1.5">
-            <label className="text-[11px] font-bold uppercase text-slate-400 tracking-wider">
-              Modo de Prueba (Roles):
-            </label>
+        {isActualAdmin && (
+          <div>
+            <div className="flex items-center justify-between mb-1.5">
+              <label className="text-[11px] font-bold uppercase text-slate-400 tracking-wider">
+                Alternar Vista (Admin):
+              </label>
+            </div>
+            <div className="grid grid-cols-2 gap-1.5 bg-slate-100 p-1 rounded-2xl border border-slate-200">
+              <button
+                onClick={() => {
+                  switchRole('employee');
+                  if (['employees', 'settings', 'itss', 'audit'].includes(activeTab)) {
+                    setActiveTab('dashboard');
+                  }
+                }}
+                className={`py-2 px-2 rounded-xl text-xs font-black transition-all cursor-pointer ${
+                  !isAdmin
+                    ? 'bg-white text-indigo-700 shadow-sm border border-slate-200/50'
+                    : 'text-slate-500 hover:text-slate-800'
+                }`}
+              >
+                Empleado
+              </button>
+              <button
+                onClick={() => {
+                  switchRole('admin');
+                }}
+                className={`py-2 px-2 rounded-xl text-xs font-black transition-all cursor-pointer ${
+                  isAdmin
+                    ? 'bg-indigo-600 text-white shadow-sm'
+                    : 'text-slate-500 hover:text-slate-800'
+                }`}
+              >
+                Admin / RRHH
+              </button>
+            </div>
           </div>
-          <div className="grid grid-cols-2 gap-1.5 bg-slate-100 p-1 rounded-2xl border border-slate-200">
-            <button
-              onClick={() => {
-                switchRole('employee');
-                if (['employees', 'settings', 'itss', 'audit'].includes(activeTab)) {
-                  setActiveTab('dashboard');
-                }
-              }}
-              className={`py-2 px-2 rounded-xl text-xs font-black transition-all cursor-pointer ${
-                !isAdmin
-                  ? 'bg-white text-indigo-700 shadow-sm border border-slate-200/50'
-                  : 'text-slate-500 hover:text-slate-800'
-              }`}
-            >
-              Empleado
-            </button>
-            <button
-              onClick={() => {
-                switchRole('admin');
-              }}
-              className={`py-2 px-2 rounded-xl text-xs font-black transition-all cursor-pointer ${
-                isAdmin
-                  ? 'bg-indigo-600 text-white shadow-sm'
-                  : 'text-slate-500 hover:text-slate-800'
-              }`}
-            >
-              Admin / RRHH
-            </button>
-          </div>
-        </div>
+        )}
 
         {/* Logout Button */}
         <button

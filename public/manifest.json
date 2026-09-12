@@ -1,4 +1,5 @@
 {
+  "id": "/",
   "name": "FichaPlus - Control Horario & Terminal Móvil",
   "short_name": "FichaPlus",
   "description": "Terminal móvil para fichaje laboral con geolocalización GPS, alarmas y firma legal SHA-256.",
@@ -15,28 +16,34 @@
   "prefer_related_applications": false,
   "icons": [
     {
+      "src": "/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "maskable"
+    },
+    {
+      "src": "/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    },
+    {
       "src": "/icon-192.svg",
       "sizes": "192x192",
       "type": "image/svg+xml",
       "purpose": "any"
-    },
-    {
-      "src": "/icon-192.svg",
-      "sizes": "192x192",
-      "type": "image/svg+xml",
-      "purpose": "maskable"
-    },
-    {
-      "src": "/icon-512.svg",
-      "sizes": "512x512",
-      "type": "image/svg+xml",
-      "purpose": "any"
-    },
-    {
-      "src": "/icon-512.svg",
-      "sizes": "512x512",
-      "type": "image/svg+xml",
-      "purpose": "maskable"
     }
   ],
   "shortcuts": [
@@ -45,28 +52,28 @@
       "short_name": "Fichar",
       "description": "Abrir reloj de control horario inmediato",
       "url": "/?tab=dashboard&action=clock",
-      "icons": [{ "src": "/icon-192.svg", "sizes": "192x192" }]
+      "icons": [{ "src": "/icon-192.png", "sizes": "192x192" }]
     },
     {
       "name": "Ver Mis Turnos y Horarios",
       "short_name": "Turnos",
       "description": "Consulta de cuadrante semanal y rotaciones",
       "url": "/?tab=shifts",
-      "icons": [{ "src": "/icon-192.svg", "sizes": "192x192" }]
+      "icons": [{ "src": "/icon-192.png", "sizes": "192x192" }]
     },
     {
       "name": "Firmar Mes Legal (Art. 34.9)",
       "short_name": "Firmar",
       "description": "Firma digital del registro mensual",
       "url": "/?tab=monthly_sign",
-      "icons": [{ "src": "/icon-192.svg", "sizes": "192x192" }]
+      "icons": [{ "src": "/icon-192.png", "sizes": "192x192" }]
     },
     {
       "name": "Alarmas y Recordatorios",
       "short_name": "Alarmas",
       "description": "Configurar avisos de entrada y pausas",
       "url": "/?tab=alarms",
-      "icons": [{ "src": "/icon-192.svg", "sizes": "192x192" }]
+      "icons": [{ "src": "/icon-192.png", "sizes": "192x192" }]
     }
   ]
 }

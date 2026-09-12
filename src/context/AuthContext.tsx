@@ -3,7 +3,7 @@ import { User, signInWithPopup, signOut as fbSignOut, onAuthStateChanged } from 
 import { doc, getDoc, setDoc } from 'firebase/firestore';
 import { auth, db, googleProvider } from '../firebase';
 import { UserProfile, EmployeeRecord } from '../types';
-import { MASTER_ADMIN_RECORD } from '../utils/employeeUtils';
+import { MASTER_ADMIN_RECORD, INITIAL_KNOWN_EMPLOYEES } from '../utils/employeeUtils';
 
 export interface AuthResult {
   success: boolean;
@@ -66,33 +66,81 @@ export const getKnownEmployees = (): EmployeeRecord[] => {
     }
   } catch (e) {}
 
-  return [MASTER_ADMIN_RECORD];
+  return INITIAL_KNOWN_EMPLOYEES;
+};
+
+// Synchronously resolve the initial profile (e.g. from magic invite links in URL or cached session)
+const resolveInitialAuthProfile = (): { profile: UserProfile; isAuthenticated: boolean } => {
+  try {
+    // 1. Check Magic Link (?email=... or ?invite=... or ?login=...)
+    if (typeof window !== 'undefined') {
+      const params = new URLSearchParams(window.location.search);
+      const urlEmail = params.get('email') || params.get('login') || params.get('invite');
+      if (urlEmail) {
+        const clean = urlEmail.trim().toLowerCase();
+        const emps = getKnownEmployees();
+        const match = emps.find(
+          (e) =>
+            e.email.trim().toLowerCase() === clean ||
+            e.id.toLowerCase() === clean ||
+            e.dni.trim().toLowerCase() === clean
+        );
+        if (match) {
+          const isOwnerAdmin =
+            match.role === 'admin' ||
+            match.role === 'manager' ||
+            match.id === 'emp-001' ||
+            match.email.toLowerCase() === 'cesar626313978@gmail.com';
+
+          const p: UserProfile = {
+            id: match.id,
+            name: match.fullName,
+            email: match.email,
+            role: isOwnerAdmin ? 'admin' : (match.role || 'employee'),
+            avatarUrl: match.avatarUrl || `https://api.dicebear.com/7.x/avataaars/svg?seed=${encodeURIComponent(match.fullName)}`,
+            dni: match.dni,
+            phone: match.phone || '',
+            department: match.department || 'Operaciones',
+            jobTitle: match.jobTitle || 'Empleado',
+            contractType: match.contractType || 'Indefinido',
+            weeklyHours: match.weeklyHours || 40,
+            currentShift: match.shiftWeekA || 'Mañana',
+          };
+          localStorage.setItem('fichaplus_profile', JSON.stringify(p));
+          localStorage.setItem('fichaplus_session_active', 'true');
+          localStorage.removeItem('fichaplus_logged_out');
+          if (!isOwnerAdmin) {
+            localStorage.removeItem('fichaplus_admin_privilege');
+          }
+          return { profile: p, isAuthenticated: true };
+        }
+      }
+    }
+
+    // 2. Check saved profile from active session
+    const saved = localStorage.getItem('fichaplus_profile');
+    const isLoggedOut = localStorage.getItem('fichaplus_logged_out') === 'true';
+    const hasActiveSession = localStorage.getItem('fichaplus_session_active') === 'true';
+
+    if (saved) {
+      const parsed = JSON.parse(saved);
+      // Clean up privilege if parsed role is employee
+      if (parsed.role === 'employee' && parsed.id !== 'emp-001' && parsed.email?.toLowerCase() !== 'cesar626313978@gmail.com') {
+        localStorage.removeItem('fichaplus_admin_privilege');
+      }
+      return { profile: parsed, isAuthenticated: hasActiveSession && !isLoggedOut };
+    }
+  } catch {}
+
+  return { profile: DEFAULT_PROFILE, isAuthenticated: false };
 };
 
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [user, setUser] = useState<User | null>(null);
-  const [profile, setProfile] = useState<UserProfile>(() => {
-    try {
-      const saved = localStorage.getItem('fichaplus_profile');
-      if (saved) {
-        const parsed = JSON.parse(saved);
-        // Self-heal: If cached profile has the old demo placeholder '12345678X' or 'Desarrollo & RRHH', sync with MASTER_ADMIN_RECORD
-        if (
-          (parsed.dni === '12345678X' || parsed.department === 'Desarrollo & RRHH') &&
-          (parsed.email?.toLowerCase() === 'cesar626313978@gmail.com' || parsed.id === 'emp-001' || parsed.name?.includes('César'))
-        ) {
-          parsed.dni = MASTER_ADMIN_RECORD.dni;
-          parsed.department = parsed.department === 'Desarrollo & RRHH' ? MASTER_ADMIN_RECORD.department : parsed.department;
-          parsed.jobTitle = parsed.jobTitle === 'Responsable de Personal' ? MASTER_ADMIN_RECORD.jobTitle : parsed.jobTitle;
-          localStorage.setItem('fichaplus_profile', JSON.stringify(parsed));
-        }
-        return parsed;
-      }
-      return DEFAULT_PROFILE;
-    } catch {
-      return DEFAULT_PROFILE;
-    }
-  });
+  const initialAuth = useMemo(() => resolveInitialAuthProfile(), []);
+  const [profile, setProfile] = useState<UserProfile>(initialAuth.profile);
+  const [isAuthenticated, setIsAuthenticated] = useState<boolean>(initialAuth.isAuthenticated);
+  const [loading, setLoading] = useState(false);
 
   // Listen to profile updates emitted by employee updates
   useEffect(() => {
@@ -108,31 +156,20 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     return () => window.removeEventListener('fichaplus_profile_updated', handleProfileSync);
   }, []);
 
-  const [isAuthenticated, setIsAuthenticated] = useState<boolean>(() => {
-    try {
-      const isLoggedOut = localStorage.getItem('fichaplus_logged_out');
-      if (isLoggedOut === 'true') return false;
-      const hasActiveSession = localStorage.getItem('fichaplus_session_active');
-      return hasActiveSession === 'true';
-    } catch {
-      return false;
-    }
-  });
-  const [loading, setLoading] = useState(false);
-
-  // Determine if this user is a genuine Administrator/Owner with privileges to switch roles
+  // Determine if this user is a genuine Administrator/Owner with privileges to access admin tools
   const isActualAdmin = useMemo(() => {
-    if (
+    if (!isAuthenticated) return false;
+
+    // Direct check for Owner / Superadmin (César Hernández Moreno)
+    const isOwner =
       profile.email?.trim().toLowerCase() === 'cesar626313978@gmail.com' ||
       profile.id === 'emp-001' ||
       profile.dni?.trim().toUpperCase() === '21493249W' ||
-      user?.email?.trim().toLowerCase() === 'cesar626313978@gmail.com'
-    ) {
-      return true;
-    }
-    if (localStorage.getItem('fichaplus_admin_privilege') === 'true') {
-      return true;
-    }
+      user?.email?.trim().toLowerCase() === 'cesar626313978@gmail.com';
+
+    if (isOwner) return true;
+
+    // Check against company records
     const emps = getKnownEmployees();
     const foundEmp = emps.find(
       (e) =>
@@ -140,16 +177,22 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         (profile.id && e.id === profile.id) ||
         (user?.email && e.email && e.email.trim().toLowerCase() === user.email.trim().toLowerCase())
     );
-    if (foundEmp && (foundEmp.role === 'admin' || foundEmp.role === 'manager' || foundEmp.id === 'emp-001')) {
-      return true;
-    }
-    return false;
-  }, [profile.email, profile.id, profile.dni, user?.email]);
 
+    if (foundEmp) {
+      if (foundEmp.role === 'employee' || !foundEmp.role) {
+        return false;
+      }
+      return foundEmp.role === 'admin' || foundEmp.role === 'manager';
+    }
+
+    return profile.role === 'admin' || profile.role === 'manager';
+  }, [profile.email, profile.id, profile.dni, profile.role, user?.email, isAuthenticated]);
+
+  // Clean up any stale admin privileges if not genuine admin
   useEffect(() => {
-    if (isActualAdmin) {
+    if (!isActualAdmin) {
       try {
-        localStorage.setItem('fichaplus_admin_privilege', 'true');
+        localStorage.removeItem('fichaplus_admin_privilege');
       } catch {}
     }
   }, [isActualAdmin]);
@@ -270,14 +313,19 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     localStorage.removeItem('fichaplus_logged_out');
     localStorage.setItem('fichaplus_session_active', 'true');
     localStorage.setItem('fichaplus_profile', JSON.stringify(p));
-    if (
+    const isOwnerOrAdmin =
       p.role === 'admin' ||
       p.role === 'manager' ||
       p.id === 'emp-001' ||
-      p.email?.toLowerCase() === 'cesar626313978@gmail.com'
-    ) {
+      p.email?.toLowerCase() === 'cesar626313978@gmail.com';
+
+    if (isOwnerOrAdmin) {
       try {
         localStorage.setItem('fichaplus_admin_privilege', 'true');
+      } catch {}
+    } else {
+      try {
+        localStorage.removeItem('fichaplus_admin_privilege');
       } catch {}
     }
   };
@@ -561,6 +609,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   const switchRole = (role: 'employee' | 'admin' | 'manager') => {
+    if (!isActualAdmin && role !== 'employee') {
+      console.warn('Unauthorized role switch attempt blocked: current user is not an administrator.');
+      return;
+    }
     setProfile((prev) => {
       const updated = { ...prev, role };
       localStorage.setItem('fichaplus_profile', JSON.stringify(updated));

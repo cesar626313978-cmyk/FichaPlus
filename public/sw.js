@@ -1,8 +1,11 @@
-const CACHE_NAME = 'fichaplus-pwa-v2';
+const CACHE_NAME = 'fichaplus-pwa-v3';
 const ASSETS_TO_CACHE = [
   '/',
   '/index.html',
   '/manifest.json',
+  '/icon-192.png',
+  '/icon-512.png',
+  '/apple-touch-icon.png',
   '/icon-192.svg',
   '/icon-512.svg',
 ];
