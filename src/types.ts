@@ -137,6 +137,28 @@ export interface TimeEntry {
   hasIncident?: boolean;
 }
 
+export interface ActivePunchDoc {
+  punchDocKey: string;
+  userId: string;
+  userEmail?: string;
+  userName?: string;
+  isClockedIn: boolean;
+  isPaused: boolean;
+  clockInTime: string;
+  clockInTimestamp: number;
+  currentShiftNumber?: 1 | 2;
+  workdayPlan?: WorkdayPlanType;
+  workType?: 'presencial' | 'teletrabajo' | 'cliente';
+  pausedAtTimestamp?: number | null;
+  accumulatedPauseSeconds?: number;
+  pauseReason?: string;
+  date?: string;
+  activeEntryId?: string | null;
+  shift1?: ShiftDetail;
+  shift2?: ShiftDetail;
+  updatedAt: number;
+}
+
 export interface DevicePermissionsState {
   geolocation: 'granted' | 'denied' | 'prompt' | 'unsupported';
   notifications: 'granted' | 'denied' | 'default' | 'unsupported';

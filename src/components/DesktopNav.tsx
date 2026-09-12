@@ -1,7 +1,8 @@
-import React from 'react';
+import React, { useMemo } from 'react';
 import { useApp } from '../context/AppContext';
 import { useAuth } from '../context/AuthContext';
 import { UserAvatar } from './UserAvatar';
+import { isMonthClosed } from '../utils/employeeUtils';
 
 interface NavItem {
   id: string;
@@ -22,15 +23,30 @@ export const DesktopNav: React.FC = () => {
       t.userName === profile.name ||
       (employees.length <= 1 && (!t.userId || t.userId === 'emp-001'))
   );
-  const computedUserHours = userEntriesForSign.reduce((sum, e) => sum + (e.totalHoursWorked || 0), 0);
-  const hasHoursToSign = computedUserHours > 0 || (monthlyRecord?.ordinaryHours || 0) > 0 || userEntriesForSign.length > 0;
-  const hasPendingMonthlySign = !monthlyRecord?.isSigned && hasHoursToSign;
 
-  const hasAdminPendingSignatures = employees.some(
-    (emp) =>
-      !monthlyRecord?.isSigned &&
-      ((timeEntries || []).some((t) => t.userId === emp.id && (t.totalHoursWorked || 0) > 0) || (monthlyRecord?.ordinaryHours || 0) > 0)
-  );
+  // Check if there are closed past months pending signature ("a mes vencido")
+  const hasPendingMonthlySign = useMemo(() => {
+    return userEntriesForSign.some((entry) => {
+      if (!entry.date) return false;
+      const ym = entry.date.slice(0, 7);
+      if (!isMonthClosed(ym)) return false;
+      const isSigned = monthlyRecord?.yearMonth === ym && monthlyRecord.isSigned;
+      return !isSigned && (entry.totalHoursWorked || 0) > 0;
+    });
+  }, [userEntriesForSign, monthlyRecord]);
+
+  const hasAdminPendingSignatures = useMemo(() => {
+    return employees.some((emp) => {
+      return (timeEntries || []).some((t) => {
+        if (t.userId !== emp.id) return false;
+        if (!t.date) return false;
+        const ym = t.date.slice(0, 7);
+        if (!isMonthClosed(ym)) return false;
+        const isSigned = monthlyRecord?.yearMonth === ym && monthlyRecord.isSigned;
+        return !isSigned && (t.totalHoursWorked || 0) > 0;
+      });
+    });
+  }, [employees, timeEntries, monthlyRecord]);
 
   const employeeNavItems: NavItem[] = [
     { id: 'dashboard', label: 'Mi Terminal de Fichaje', icon: 'timer' },

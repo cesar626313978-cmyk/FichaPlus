@@ -27,6 +27,7 @@ import {
   AccessRequest,
   WorkdayPlanType,
   ShiftDetail,
+  ActivePunchDoc,
 } from '../types';
 import { generateSHA256 } from '../utils/crypto';
 import {
@@ -47,6 +48,8 @@ import {
   isMasterAdmin,
   MASTER_ADMIN_RECORD,
   INITIAL_KNOWN_EMPLOYEES,
+  getPunchDocKey,
+  formatYearMonthLabel,
 } from '../utils/employeeUtils';
 
 interface AppContextType {
@@ -118,7 +121,7 @@ interface AppContextType {
   approveAccessRequest: (id: string, customDepartment?: string, customJobTitle?: string) => Promise<void>;
   rejectAccessRequest: (id: string) => Promise<void>;
 
-  signMonthlyRecord: () => Promise<string>;
+  signMonthlyRecord: (targetYearMonth?: string, hoursWorked?: number) => Promise<string>;
   
   toggleAlarm: (id: string) => void;
   saveAlarm: (alarm: AlarmItem) => void;
@@ -820,6 +823,187 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }
   };
 
+  // Unique document key in Cloud Firestore for cross-device synchronization
+  const punchDocKey = useMemo(() => {
+    return getPunchDocKey(profile, currentEmployee);
+  }, [profile, currentEmployee]);
+
+  // Real-time Cross-Device Workday Synchronization via Cloud Firestore
+  // When an employee clocks in/pauses/resumes/stops on their phone,
+  // their PC (and any other active device logged into the same account)
+  // instantly updates in real-time with the exact same state and live timer.
+  useEffect(() => {
+    if (!punchDocKey) return;
+
+    let isSubscribed = true;
+    const punchDocRef = doc(db, 'active_punches', punchDocKey);
+
+    const unsubscribe = onSnapshot(
+      punchDocRef,
+      (snap) => {
+        if (!isSubscribed) return;
+
+        if (snap.exists()) {
+          const data = snap.data() as ActivePunchDoc;
+          if (data && data.isClockedIn && data.clockInTimestamp) {
+            const ageHours = (Date.now() - data.clockInTimestamp) / (1000 * 3600);
+            if (ageHours < 24) {
+              setIsClockedIn(true);
+              setIsPaused(!!data.isPaused);
+              setClockInTime(data.clockInTime || null);
+              setClockInTimestamp(data.clockInTimestamp);
+              setPausedAtTimestamp(data.pausedAtTimestamp || null);
+              setAccumulatedPauseSeconds(data.accumulatedPauseSeconds || 0);
+              setActiveEntryId(data.activeEntryId || null);
+              setCurrentShiftNumber(data.currentShiftNumber || 1);
+              setWorkdayPlan(data.workdayPlan || 'continua');
+              setWorkType(data.workType || 'presencial');
+              setPauseReason(data.pauseReason || 'Pausa');
+              if (data.shift1) setShift1(data.shift1);
+              if (data.shift2) setShift2(data.shift2);
+
+              // Compute elapsed seconds accurately
+              if (data.isPaused && data.pausedAtTimestamp) {
+                setElapsedSeconds(
+                  Math.max(
+                    0,
+                    Math.floor((data.pausedAtTimestamp - data.clockInTimestamp) / 1000) -
+                      (data.accumulatedPauseSeconds || 0)
+                  )
+                );
+              } else {
+                setElapsedSeconds(
+                  Math.max(
+                    0,
+                    Math.floor((Date.now() - data.clockInTimestamp) / 1000) -
+                      (data.accumulatedPauseSeconds || 0)
+                  )
+                );
+              }
+
+              // Also update device local storage
+              const currentUserId = profile?.id || currentEmployee?.id || 'emp-001';
+              try {
+                localStorage.setItem(`fichaplus_punch_${currentUserId}`, JSON.stringify(data));
+                localStorage.setItem('fichaplus_active_punch_state', JSON.stringify(data));
+              } catch {}
+              return;
+            }
+          } else if (data && data.isClockedIn === false) {
+            // Explicitly stopped or closed from another device
+            setIsClockedIn(false);
+            setIsPaused(false);
+            setClockInTime(null);
+            setClockInTimestamp(null);
+            setPausedAtTimestamp(null);
+            setAccumulatedPauseSeconds(0);
+            setActiveEntryId(null);
+            setElapsedSeconds(0);
+            const currentUserId = profile?.id || currentEmployee?.id || 'emp-001';
+            try {
+              localStorage.removeItem(`fichaplus_punch_${currentUserId}`);
+              localStorage.removeItem('fichaplus_active_punch_state');
+            } catch {}
+            return;
+          }
+        }
+
+        // If no cloud document exists yet in Firestore:
+        // If this device already has an active punch in localStorage (e.g. phone that punched in earlier),
+        // publish it to Firestore right now so the PC sees it!
+        const localPunch = getStoredPunchState(profile?.id);
+        if (localPunch && localPunch.isClockedIn && localPunch.clockInTimestamp) {
+          const ageHours = (Date.now() - localPunch.clockInTimestamp) / (1000 * 3600);
+          if (ageHours < 24) {
+            const payload: ActivePunchDoc = {
+              ...localPunch,
+              punchDocKey,
+              userId: profile?.id || currentEmployee?.id || 'emp-001',
+              userEmail: profile?.email?.toLowerCase() || '',
+              userName: profile?.name || currentEmployee?.fullName || '',
+              updatedAt: Date.now(),
+            };
+            safeFirestoreWrite(setDoc(punchDocRef, payload), 1200);
+          }
+        }
+      },
+      (err) => {
+        console.warn('Firestore active_punches listener notice:', err?.message);
+      }
+    );
+
+    return () => {
+      isSubscribed = false;
+      unsubscribe();
+    };
+  }, [punchDocKey, profile?.id, profile?.email, profile?.name, currentEmployee?.id]);
+
+  // Fallback Workday Recovery from Cloud time_entries:
+  // If active_punches was empty but an incomplete time_entry exists for today in Firestore,
+  // restore the active workday automatically on PC.
+  useEffect(() => {
+    if (isClockedIn || !punchDocKey) return;
+
+    const todayDate = new Date();
+    const todayStr = todayDate.toISOString().slice(0, 10);
+    const dayOfMonth = todayDate.getDate().toString();
+
+    const matchingEntry = timeEntries.find(
+      (e) =>
+        !e.isComplete &&
+        (e.date?.includes(todayStr) || e.date?.includes(dayOfMonth)) &&
+        (e.userId === profile.id ||
+          (currentEmployee && e.userId === currentEmployee.id) ||
+          (profile.email && e.userId?.toLowerCase() === profile.email.toLowerCase()) ||
+          (profile.name && e.userName?.toLowerCase() === profile.name.toLowerCase()))
+    );
+
+    if (matchingEntry && matchingEntry.clockIn) {
+      try {
+        const [h, m] = matchingEntry.clockIn.split(':').map(Number);
+        if (!isNaN(h) && !isNaN(m)) {
+          const d = new Date();
+          d.setHours(h, m, 0, 0);
+          const reconstructedTimestamp = d.getTime();
+          const now = Date.now();
+          if (reconstructedTimestamp <= now && now - reconstructedTimestamp < 24 * 3600 * 1000) {
+            console.log('[FichaPlus Cloud] Restoring active workday from incomplete time_entry:', matchingEntry);
+            setIsClockedIn(true);
+            setClockInTime(matchingEntry.clockIn);
+            setClockInTimestamp(reconstructedTimestamp);
+            setActiveEntryId(matchingEntry.id);
+            setWorkType(matchingEntry.workType || 'presencial');
+            setWorkdayPlan(matchingEntry.workdayPlan || 'continua');
+            setElapsedSeconds(Math.max(0, Math.floor((now - reconstructedTimestamp) / 1000)));
+
+            const recoveredDoc: ActivePunchDoc = {
+              punchDocKey,
+              userId: profile.id,
+              userEmail: profile.email?.toLowerCase() || '',
+              userName: profile.name,
+              isClockedIn: true,
+              isPaused: false,
+              clockInTime: matchingEntry.clockIn,
+              clockInTimestamp: reconstructedTimestamp,
+              currentShiftNumber: 1,
+              workdayPlan: matchingEntry.workdayPlan || 'continua',
+              workType: matchingEntry.workType || 'presencial',
+              pausedAtTimestamp: null,
+              accumulatedPauseSeconds: 0,
+              pauseReason: 'Pausa',
+              date: todayStr,
+              activeEntryId: matchingEntry.id,
+              updatedAt: now,
+            };
+            safeFirestoreWrite(setDoc(doc(db, 'active_punches', punchDocKey), recoveredDoc), 1200);
+          }
+        }
+      } catch (err) {
+        console.warn('Could not restore punch from time_entry:', err);
+      }
+    }
+  }, [timeEntries, isClockedIn, punchDocKey, profile.id, profile.email, profile.name, currentEmployee?.id]);
+
   // Sync punch state when user profile changes
   useEffect(() => {
     if (!profile?.id) return;
@@ -1054,15 +1238,15 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   // Firebase Firestore Listeners with anti-mock filtering and real-time live synchronization
   useEffect(() => {
     try {
-      const qEntries = query(collection(db, 'time_entries'), orderBy('date', 'desc'), limit(50));
       const unsubEntries = onSnapshot(
-        qEntries,
+        collection(db, 'time_entries'),
         (snap) => {
           setIsCloudConnected(true);
           if (!snap.empty) {
             const list = snap.docs
               .map((d) => ({ id: d.id, ...d.data() } as TimeEntry))
-              .filter((e) => !isMockEntryId(e.id));
+              .filter((e) => !isMockEntryId(e.id))
+              .sort((a, b) => (b.date || '').localeCompare(a.date || ''));
             setTimeEntries(list);
           }
         },
@@ -1427,6 +1611,20 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       localStorage.setItem('fichaplus_active_punch_state', JSON.stringify(immediatePunch));
     } catch {}
 
+    // Synchronize active punch to Cloud Firestore immediately for cross-device support (Phone <-> PC)
+    if (punchDocKey) {
+      safeFirestoreWrite(
+        setDoc(doc(db, 'active_punches', punchDocKey), {
+          ...immediatePunch,
+          punchDocKey,
+          userEmail: profile?.email?.toLowerCase() || '',
+          userName: currentEmployee?.fullName || profile.name,
+          updatedAt: nowTimestamp,
+        }),
+        1200
+      );
+    }
+
     // 1. Hardware triggers
     triggerHaptic('clockIn');
     playDeviceChime('clockIn');
@@ -1532,6 +1730,22 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       `☕ Pausa Registrada (${finalReason})`,
       `Has pausado el contador de jornada laboral.${notes ? ` Motivo: ${notes}` : ''}`
     );
+
+    if (punchDocKey) {
+      safeFirestoreWrite(
+        setDoc(
+          doc(db, 'active_punches', punchDocKey),
+          {
+            isPaused: true,
+            pausedAtTimestamp: now,
+            pauseReason: finalReason,
+            updatedAt: now,
+          },
+          { merge: true }
+        ),
+        1000
+      );
+    }
   };
 
   const resumeWorkday = async () => {
@@ -1553,6 +1767,22 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       '▶️ Jornada Reanudada',
       'El registro de tiempo se ha reactivado.'
     );
+
+    if (punchDocKey) {
+      safeFirestoreWrite(
+        setDoc(
+          doc(db, 'active_punches', punchDocKey),
+          {
+            isPaused: false,
+            pausedAtTimestamp: null,
+            accumulatedPauseSeconds: (accumulatedPauseSeconds || 0) + pauseDuration,
+            updatedAt: now,
+          },
+          { merge: true }
+        ),
+        1000
+      );
+    }
   };
 
   const stopWorkday = async (shiftNum?: 1 | 2) => {
@@ -1577,6 +1807,26 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       localStorage.removeItem(`fichaplus_punch_${currentUserId}`);
       localStorage.removeItem('fichaplus_active_punch_state');
     } catch {}
+
+    // Update active_punches in Cloud Firestore to notify other devices
+    if (punchDocKey) {
+      safeFirestoreWrite(
+        setDoc(
+          doc(db, 'active_punches', punchDocKey),
+          {
+            isClockedIn: false,
+            isPaused: false,
+            clockOutTime: timeShort,
+            clockInTimestamp: null,
+            pausedAtTimestamp: null,
+            activeEntryId: null,
+            updatedAt: Date.now(),
+          },
+          { merge: true }
+        ),
+        1000
+      );
+    }
 
     if (workdayPlan === 'partida' && targetShift === 1) {
       // Shift 1 finished -> Go to between shifts
@@ -1710,6 +1960,24 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       localStorage.removeItem(`fichaplus_punch_${currentUserId}`);
       localStorage.removeItem('fichaplus_active_punch_state');
     } catch {}
+
+    if (punchDocKey) {
+      safeFirestoreWrite(
+        setDoc(
+          doc(db, 'active_punches', punchDocKey),
+          {
+            isClockedIn: false,
+            isPaused: false,
+            clockInTimestamp: null,
+            pausedAtTimestamp: null,
+            activeEntryId: null,
+            updatedAt: Date.now(),
+          },
+          { merge: true }
+        ),
+        1000
+      );
+    }
   };
 
   const addTimeOffRequest = async (req: Omit<TimeOffRequest, 'id' | 'createdAt' | 'status'>) => {
@@ -1845,8 +2113,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     await safeFirestoreWrite(updateDoc(doc(db, 'incidents', id), { status: 'RECHAZADO' }), 800);
   };
 
-  const signMonthlyRecord = async (): Promise<string> => {
-    const signPayload = `FICHAPLUS_LEGAL_SIGN_${profile.dni}_${profile.name}_${monthlyRecord.month}_${Date.now()}`;
+  const signMonthlyRecord = async (targetYearMonth?: string, hoursWorked?: number): Promise<string> => {
+    const ym = targetYearMonth || monthlyRecord.yearMonth || new Date().toISOString().slice(0, 7);
+    const mLabel = formatYearMonthLabel(ym);
+    const signPayload = `FICHAPLUS_LEGAL_SIGN_${profile.dni}_${profile.name}_${ym}_${Date.now()}`;
     const hash = await generateSHA256(signPayload);
     const signedDate = new Date().toLocaleString('es-ES', {
       day: '2-digit',
@@ -1859,12 +2129,22 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
     const updated: MonthlyRecord = {
       ...monthlyRecord,
+      yearMonth: ym,
+      month: mLabel,
+      ordinaryHours: typeof hoursWorked === 'number' ? hoursWorked : monthlyRecord.ordinaryHours,
       isSigned: true,
       signedAt: signedDate,
       securityHash: hash,
       signedByName: profile.name,
     };
     setMonthlyRecord(updated);
+
+    try {
+      const savedRaw = localStorage.getItem('fichaplus_monthly_records');
+      const savedMap = savedRaw ? JSON.parse(savedRaw) : {};
+      savedMap[ym] = updated;
+      localStorage.setItem('fichaplus_monthly_records', JSON.stringify(savedMap));
+    } catch {}
 
     // Add to audit logs
     const log: AuditLog = {
@@ -1874,9 +2154,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       performedByRole: 'Empleado Titular',
       affectedUserId: profile.id,
       affectedUserName: profile.name,
-      previousValue: 'PENDIENTE DE FIRMA',
+      previousValue: `PENDIENTE DE FIRMA (${mLabel})`,
       newValue: `FIRMADO CON HASH ${hash.slice(0, 10)}...`,
-      justification: 'Firma mensual de conformidad Art. 34.9 Estatuto de los Trabajadores.',
+      justification: `Firma mensual de conformidad Art. 34.9 Estatuto de los Trabajadores para ${mLabel}.`,
       timestamp: signedDate,
       securityHash: hash,
     };

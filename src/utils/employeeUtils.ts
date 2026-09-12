@@ -418,3 +418,66 @@ export const getEmployeeVacationType = (
   return emp.vacationDaysType === 'LABORABLES' ? 'LABORABLES' : 'NATURALES';
 };
 
+/**
+ * Resolves a unique, device-independent Firestore document key for real-time punch state synchronization.
+ * Prioritizes normalized email, then DNI, then employee ID.
+ */
+export const getPunchDocKey = (
+  user?: { email?: string; dni?: string; id?: string } | null,
+  emp?: Partial<EmployeeRecord> | null
+): string => {
+  const email = (user?.email || emp?.email || '').trim().toLowerCase();
+  if (email) {
+    return `punch_email_${email.replace(/[^a-z0-9]/g, '_')}`;
+  }
+  const dni = (user?.dni || emp?.dni || '').trim().toLowerCase();
+  if (dni) {
+    return `punch_dni_${dni.replace(/[^a-z0-9]/g, '_')}`;
+  }
+  const id = (user?.id || emp?.id || 'emp-001').toLowerCase();
+  return `punch_id_${id.replace(/[^a-z0-9]/g, '_')}`;
+};
+
+/**
+ * Formats a "YYYY-MM" string to a human-readable Spanish month label.
+ * E.g. "2026-09" -> "Septiembre de 2026"
+ */
+export const formatYearMonthLabel = (yearMonth: string): string => {
+  if (!yearMonth || !yearMonth.includes('-')) return yearMonth || '';
+  const [y, m] = yearMonth.split('-').map(Number);
+  if (isNaN(y) || isNaN(m)) return yearMonth;
+  const d = new Date(y, m - 1, 1);
+  const raw = d.toLocaleString('es-ES', { month: 'long', year: 'numeric' });
+  return raw.charAt(0).toUpperCase() + raw.slice(1);
+};
+
+/**
+ * Determines whether a given calendar month ("YYYY-MM") has concluded.
+ * Under Spanish Labor Law (Art. 34.9 Estatuto de los Trabajadores), monthly signing
+ * must take place "a mes vencido" (once the natural month has ended).
+ * During the active month, hours are still being registered, so asking for a signature
+ * is premature and not legally compliant.
+ */
+export const isMonthClosed = (yearMonth: string, referenceDate: Date = new Date()): boolean => {
+  if (!yearMonth) return false;
+  const [yearStr, monthStr] = yearMonth.split('-');
+  const y = parseInt(yearStr, 10);
+  const m = parseInt(monthStr, 10); // 1-12
+  if (isNaN(y) || isNaN(m)) return false;
+
+  const currentYear = referenceDate.getFullYear();
+  const currentMonth = referenceDate.getMonth() + 1; // 1-12
+
+  if (y < currentYear) return true;
+  if (y > currentYear) return false;
+
+  // Same year:
+  if (m < currentMonth) return true; // Previous month is closed
+  if (m > currentMonth) return false; // Future month
+
+  // Current month: Only considered closed if on the last calendar day after working hours (>= 20h)
+  const lastDayOfMonth = new Date(y, m, 0).getDate();
+  const currentDay = referenceDate.getDate();
+  return currentDay >= lastDayOfMonth && referenceDate.getHours() >= 20;
+};
+

@@ -5,6 +5,7 @@ import { DevicePermissionsModal } from '../components/DevicePermissionsModal';
 import { ClockActionConfirmModal, ClockActionType } from '../components/ClockActionConfirmModal';
 import { UserAvatar } from '../components/UserAvatar';
 import { WorkdayPlanType } from '../types';
+import { isMonthClosed, formatYearMonthLabel } from '../utils/employeeUtils';
 
 export const DashboardView: React.FC = () => {
   const {
@@ -75,7 +76,10 @@ export const DashboardView: React.FC = () => {
     }
   }, [employeeAllowedLocations, workType, setWorkType]);
 
-  // Compute if the employee actually has registered entries or hours to sign in the monthly report
+  // Compute if the employee has any CLOSED past month pending signature
+  // Under Spanish Labor Law (Art. 34.9 ET), the monthly signature of work hours is requested "a mes vencido"
+  // (once the calendar month has concluded). The active month in progress (e.g. September 2026)
+  // is still accumulating daily hours and CANNOT be required to be signed until the month ends.
   const userEntriesForSign = (timeEntries || []).filter(
     (t) =>
       t.userId === profile.id ||
@@ -83,10 +87,33 @@ export const DashboardView: React.FC = () => {
       (currentEmployee && t.userId === currentEmployee.id) ||
       (employees.length <= 1 && (!t.userId || t.userId === 'emp-001'))
   );
-  const computedUserHours = userEntriesForSign.reduce((sum, e) => sum + (e.totalHoursWorked || 0), 0);
-  const hasHoursToSign = computedUserHours > 0 || (monthlyRecord?.ordinaryHours || 0) > 0 || userEntriesForSign.length > 0;
-  // ONLY show the banner if the record is unsigned AND there is actual work registered to sign
-  const hasPendingMonthlySign = !monthlyRecord?.isSigned && hasHoursToSign;
+
+  const pendingClosedMonth = useMemo(() => {
+    // 1. Group closed months and sum hours
+    const closedMonthsMap = new Map<string, number>();
+    userEntriesForSign.forEach((entry) => {
+      if (!entry.date) return;
+      const ym = entry.date.slice(0, 7);
+      if (isMonthClosed(ym)) {
+        closedMonthsMap.set(ym, (closedMonthsMap.get(ym) || 0) + (entry.totalHoursWorked || 0));
+      }
+    });
+
+    // 2. Find any closed month with completed hours that hasn't been signed
+    for (const [ym, hours] of closedMonthsMap.entries()) {
+      const isSigned = monthlyRecord?.yearMonth === ym && monthlyRecord.isSigned;
+      if (!isSigned && hours > 0) {
+        return {
+          yearMonth: ym,
+          label: formatYearMonthLabel(ym),
+          hours,
+        };
+      }
+    }
+    return null;
+  }, [userEntriesForSign, monthlyRecord]);
+
+  const hasPendingMonthlySign = !!pendingClosedMonth;
   const [showConfirmModal, setShowConfirmModal] = useState(false);
 
   const formatTimer = (totalSec: number) => {
@@ -732,17 +759,17 @@ export const DashboardView: React.FC = () => {
           {/* Main Clean Terminal Punch Clock - Primary for Mobile */}
           {renderTerminalClock()}
 
-          {/* Pending Legal Tasks Reminder Banner - ONLY shown when there is actually work to sign */}
-          {hasPendingMonthlySign && (
+          {/* Pending Legal Tasks Reminder Banner - ONLY shown for closed past months with work to sign */}
+          {hasPendingMonthlySign && pendingClosedMonth && (
             <section className="bg-gradient-to-r from-amber-500 via-amber-400 to-amber-500 text-slate-900 rounded-3xl p-5 shadow-sm flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 animate-in fade-in duration-300">
               <div className="flex items-center gap-2.5">
                 <span className="material-symbols-outlined text-xl shrink-0">draw</span>
                 <div>
                   <h3 className="font-bold text-sm tracking-tight">
-                    Firma mensual pendiente ({monthlyRecord.month})
+                    Firma mensual pendiente ({pendingClosedMonth.label})
                   </h3>
                   <p className="text-xs text-slate-900/80">
-                    Recuerda firmar tu hoja de registro mensual obligatoria de jornada ({computedUserHours.toFixed(1)}h computadas).
+                    El mes de {pendingClosedMonth.label} ha finalizado. Recuerda firmar tu hoja de registro mensual obligatoria ({pendingClosedMonth.hours.toFixed(1)}h computadas) según el Art. 34.9 ET.
                   </p>
                 </div>
               </div>
