@@ -23,6 +23,22 @@ export type SaturdayPlanType = 'NO' | 'ALTERNO_A' | 'ALTERNO_B' | 'TODOS';
 
 export type AllowedWorkLocation = 'presencial' | 'teletrabajo' | 'cliente';
 
+export type ReminderAlertType = 'voice' | 'vibration' | 'sound' | 'silent' | 'off';
+
+export interface ShiftReminderItem {
+  enabled: boolean;
+  alertType: ReminderAlertType; // 'voice' (voz sintetizada), 'vibration' (vibración móvil), 'sound' (melodía Web Audio), 'silent' (push sin sonido), 'off' (desactivado)
+  leadMinutes: number; // 0 (en punto), 5, 10, 15, 30 min antes
+  customMessage?: string;
+}
+
+export interface EmployeeReminders {
+  enabled: boolean;
+  clockIn: ShiftReminderItem;
+  clockOut: ShiftReminderItem;
+  shift2?: ShiftReminderItem;
+}
+
 export interface EmployeeRecord {
   id: string;
   employeeNumber: string; // EMP-001
@@ -57,6 +73,8 @@ export interface EmployeeRecord {
   vacationDays?: number; // Total días de vacaciones asignados (por defecto en empresa: 30 días naturales)
   vacationDaysType?: 'NATURALES' | 'LABORABLES'; // Tipo de cómputo: 'NATURALES' (30 días) o 'LABORABLES' (22 días)
   vacationNotes?: string; // Motivo o desglose de días adicionales (ej. '+2 días por antigüedad/convenio')
+  // Individual reminder preferences for this employee
+  reminders?: EmployeeReminders;
   joinedDate: string;
   endDate?: string; // Fecha de baja para extrabajadores (custodia 4 años)
   pinCode?: string;
@@ -135,6 +153,7 @@ export interface TimeEntry {
   };
   isComplete: boolean;
   hasIncident?: boolean;
+  securityHash?: string;
 }
 
 export interface ActivePunchDoc {

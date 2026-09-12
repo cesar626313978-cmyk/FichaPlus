@@ -3,6 +3,7 @@ import { useApp } from '../context/AppContext';
 import { useAuth } from '../context/AuthContext';
 import { EmployeeRecord, SaturdayPlanType, AllowedWorkLocation } from '../types';
 import { EmployeeInviteModal } from '../components/EmployeeInviteModal';
+import { EmployeeRemindersModal } from '../components/EmployeeRemindersModal';
 import { UserAvatar } from '../components/UserAvatar';
 import { ShiftConfigurator } from '../components/ShiftConfigurator';
 import {
@@ -28,9 +29,12 @@ export const EmployeesView: React.FC = () => {
     companySettings,
     addEmployee,
     updateEmployee,
+    updateEmployeeReminders,
     deleteEmployee,
     markEmployeeInvited,
     setActiveTab,
+    timeOffRequests,
+    setVacationPlanningEmployeeId,
     accessRequests,
     approveAccessRequest,
     rejectAccessRequest,
@@ -54,6 +58,7 @@ export const EmployeesView: React.FC = () => {
   const [successToast, setSuccessToast] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
   const [inviteModalEmployee, setInviteModalEmployee] = useState<EmployeeRecord | null>(null);
+  const [remindersModalEmployee, setRemindersModalEmployee] = useState<EmployeeRecord | null>(null);
   const [copiedLink, setCopiedLink] = useState(false);
 
   const pendingRequests = accessRequests.filter((r) => r.status === 'PENDIENTE');
@@ -952,19 +957,105 @@ export const EmployeesView: React.FC = () => {
                   <span className="text-[10px] font-bold text-amber-900 bg-amber-200/60 border border-amber-300 px-1.5 py-0.5 rounded-md">
                     {emp.vacationDaysType === 'LABORABLES' ? 'Laborables (base 22)' : 'Naturales (base 30)'}
                   </span>
+                  {(() => {
+                    const used = timeOffRequests
+                      .filter(
+                        (r) =>
+                          (r.userId === emp.id || r.userName?.toLowerCase() === emp.fullName.toLowerCase()) &&
+                          r.leaveType === 'Vacaciones' &&
+                          r.status === 'APROBADO'
+                      )
+                      .reduce((sum, r) => sum + (r.daysCount || 1), 0);
+                    const remaining = Math.max(0, (emp.vacationDays ?? 30) - used);
+                    return (
+                      <span className="text-[10px] font-bold text-slate-700 bg-white/90 border border-amber-200 px-2 py-0.5 rounded-md">
+                        {used} usados / <strong className="text-amber-900">{remaining} disponibles</strong>
+                      </span>
+                    );
+                  })()}
                   {emp.vacationNotes && (
-                    <span className="text-[10px] font-medium text-amber-900/90 italic truncate max-w-[200px]" title={emp.vacationNotes}>
+                    <span className="text-[10px] font-medium text-amber-900/90 italic truncate max-w-[180px]" title={emp.vacationNotes}>
                       • {emp.vacationNotes}
                     </span>
                   )}
                 </div>
+                <div className="flex items-center gap-1.5 ml-auto">
+                  <button
+                    onClick={() => {
+                      setVacationPlanningEmployeeId(emp.id);
+                      setActiveTab('requests');
+                    }}
+                    className="text-[11px] font-black text-indigo-700 hover:text-indigo-900 bg-white hover:bg-indigo-50 px-2.5 py-1 rounded-lg border border-indigo-200 shadow-2xs transition-all flex items-center gap-1 cursor-pointer"
+                    title="Planificar vacaciones o registrar vacaciones pasadas para este empleado"
+                  >
+                    <span className="material-symbols-outlined text-xs text-indigo-600">event_available</span>
+                    <span>Planificar / Pasadas</span>
+                  </button>
+                  <button
+                    onClick={() => openQuickVacationModal(emp)}
+                    className="text-[11px] font-bold text-amber-800 hover:text-amber-950 bg-white/80 hover:bg-white px-2 py-1 rounded-lg border border-amber-200 shadow-2xs transition-all flex items-center gap-1 cursor-pointer"
+                    title="Modificar cupo total de vacaciones de este empleado"
+                  >
+                    <span className="material-symbols-outlined text-xs text-amber-700">tune</span>
+                    <span>Cupo</span>
+                  </button>
+                </div>
+              </div>
+
+              {/* Shift Reminders & Alarms Status Bar */}
+              <div className="col-span-2 sm:col-span-3 bg-indigo-50/70 border border-indigo-200/70 rounded-xl px-3 py-2 flex flex-wrap justify-between items-center gap-2">
+                <div className="flex items-center gap-1.5 flex-wrap">
+                  <span className="material-symbols-outlined text-sm text-indigo-600">alarm_on</span>
+                  <span className="text-xs font-black text-indigo-950">
+                    Avisos Fichaje:
+                  </span>
+                  <span
+                    className={`text-[10px] font-bold px-1.5 py-0.5 rounded-md border ${
+                      emp.reminders?.enabled !== false
+                        ? 'bg-emerald-100 text-emerald-800 border-emerald-300'
+                        : 'bg-slate-200 text-slate-700 border-slate-300'
+                    }`}
+                  >
+                    {emp.reminders?.enabled !== false ? '● Activos' : '○ Off'}
+                  </span>
+                  {emp.reminders?.enabled !== false && (
+                    <span className="text-[10px] font-semibold text-indigo-900 bg-white/80 border border-indigo-200 px-2 py-0.5 rounded-md flex items-center gap-1">
+                      <span>
+                        Entrada:{' '}
+                        {emp.reminders?.clockIn?.alertType === 'voice'
+                          ? '🗣️ Voz'
+                          : emp.reminders?.clockIn?.alertType === 'vibration'
+                          ? '📳 Vibr.'
+                          : emp.reminders?.clockIn?.alertType === 'sound'
+                          ? '🔔 Sonido'
+                          : emp.reminders?.clockIn?.alertType === 'silent'
+                          ? '💬 Push'
+                          : '🗣️ Voz'}{' '}
+                        ({emp.reminders?.clockIn?.leadMinutes ?? 5}m)
+                      </span>
+                      <span>•</span>
+                      <span>
+                        Salida:{' '}
+                        {emp.reminders?.clockOut?.alertType === 'voice'
+                          ? '🗣️ Voz'
+                          : emp.reminders?.clockOut?.alertType === 'vibration'
+                          ? '📳 Vibr.'
+                          : emp.reminders?.clockOut?.alertType === 'sound'
+                          ? '🔔 Sonido'
+                          : emp.reminders?.clockOut?.alertType === 'silent'
+                          ? '💬 Push'
+                          : '🗣️ Voz'}
+                      </span>
+                    </span>
+                  )}
+                </div>
                 <button
-                  onClick={() => openQuickVacationModal(emp)}
-                  className="text-[11px] font-black text-amber-800 hover:text-amber-950 hover:underline flex items-center gap-1 cursor-pointer ml-auto bg-white/80 hover:bg-white px-2 py-0.5 rounded-lg border border-amber-200 shadow-2xs transition-all"
-                  title="Modificar días de vacaciones de este empleado"
+                  onClick={() => setRemindersModalEmployee(emp)}
+                  className="text-[11px] font-black text-indigo-800 hover:text-indigo-950 hover:underline flex items-center gap-1 cursor-pointer ml-auto bg-white/90 hover:bg-white px-2 py-0.5 rounded-lg border border-indigo-200 shadow-2xs transition-all"
+                  title="Configurar recordatorios de turno personalizados"
                 >
-                  <span className="material-symbols-outlined text-xs text-amber-700">tune</span>
-                  <span>Modificar</span>
+                  <span className="material-symbols-outlined text-xs text-indigo-700">settings_alert</span>
+                  <span>Ajustar Avisos</span>
                 </button>
               </div>
 
@@ -1006,6 +1097,27 @@ export const EmployeesView: React.FC = () => {
                 >
                   <span className="material-symbols-outlined text-sm text-amber-600">beach_access</span>
                   <span>Vacaciones ({emp.vacationDays ?? 30}d)</span>
+                </button>
+
+                <button
+                  onClick={() => setRemindersModalEmployee(emp)}
+                  className="bg-indigo-50 hover:bg-indigo-100 text-indigo-900 border border-indigo-200/80 px-2.5 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center gap-1 cursor-pointer shadow-2xs"
+                  title="Configurar recordatorios de turno (Voz, Vibración, Sonido u Off)"
+                >
+                  <span className="material-symbols-outlined text-sm text-indigo-600">alarm_on</span>
+                  <span>
+                    Avisos (
+                    {emp.reminders?.enabled === false
+                      ? 'Off'
+                      : emp.reminders?.clockIn?.alertType === 'voice'
+                      ? 'Voz'
+                      : emp.reminders?.clockIn?.alertType === 'vibration'
+                      ? 'Vibr.'
+                      : emp.reminders?.clockIn?.alertType === 'sound'
+                      ? 'Sonido'
+                      : 'Voz'}
+                    )
+                  </span>
                 </button>
 
                 <button
@@ -1924,6 +2036,31 @@ export const EmployeesView: React.FC = () => {
                   className="w-full bg-slate-50 border border-slate-200 p-2.5 rounded-xl text-xs font-semibold text-slate-800 placeholder-slate-400 focus:bg-white focus:ring-2 focus:ring-amber-400 focus:outline-none"
                 />
               </div>
+
+              {/* Direct Link to Plan vacations / past vacations */}
+              <div className="bg-indigo-50/70 border border-indigo-200/70 rounded-xl p-3 flex items-center justify-between gap-2">
+                <div className="text-left">
+                  <span className="text-[11px] font-black text-indigo-950 block">
+                    ¿Quieres planificar o registrar fechas concretas?
+                  </span>
+                  <span className="text-[10px] text-indigo-700 block">
+                    Añade periodos pasados o futuros directamente en su calendario.
+                  </span>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => {
+                    const empId = vacationModalEmployee.id;
+                    setVacationModalEmployee(null);
+                    setVacationPlanningEmployeeId(empId);
+                    setActiveTab('requests');
+                  }}
+                  className="bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-[11px] px-2.5 py-1.5 rounded-lg shadow-xs transition-all shrink-0 cursor-pointer flex items-center gap-1"
+                >
+                  <span className="material-symbols-outlined text-xs">event_available</span>
+                  <span>Planificar Fechas</span>
+                </button>
+              </div>
             </div>
 
             <div className="flex gap-2.5 pt-5 mt-4 border-t border-slate-100">
@@ -1955,6 +2092,21 @@ export const EmployeesView: React.FC = () => {
             </div>
           </div>
         </div>
+      )}
+
+      {remindersModalEmployee && (
+        <EmployeeRemindersModal
+          isOpen={!!remindersModalEmployee}
+          onClose={() => setRemindersModalEmployee(null)}
+          employee={remindersModalEmployee}
+          isAdminView={true}
+          onSave={async (updatedReminders) => {
+            await updateEmployeeReminders(remindersModalEmployee.id, updatedReminders);
+            setSuccessToast(
+              `Recordatorios configurados correctamente para ${remindersModalEmployee.fullName}`
+            );
+          }}
+        />
       )}
     </div>
   );

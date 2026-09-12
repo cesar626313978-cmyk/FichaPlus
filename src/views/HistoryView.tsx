@@ -7,7 +7,8 @@ export const HistoryView: React.FC = () => {
   const { profile } = useAuth();
   const isAdmin = profile.role === 'admin' || profile.role === 'manager';
 
-  const [selectedMonth, setSelectedMonth] = useState('2026-08');
+  const currentMonthStr = new Date().toISOString().slice(0, 7); // '2026-09'
+  const [selectedMonth, setSelectedMonth] = useState<string>(currentMonthStr);
   const [selectedEmployeeId, setSelectedEmployeeId] = useState<string>('all');
   const [selectedWorkType, setSelectedWorkType] = useState<string>('all');
 
@@ -16,12 +17,13 @@ export const HistoryView: React.FC = () => {
     if (!isAdmin && entry.userId && entry.userId !== profile.id && entry.userName !== profile.name) return false;
     if (isAdmin && selectedEmployeeId !== 'all' && entry.userId !== selectedEmployeeId) return false;
     if (selectedWorkType !== 'all' && entry.workType !== selectedWorkType) return false;
-    if (selectedMonth && entry.date && !entry.date.startsWith(selectedMonth)) return false;
+    if (selectedMonth !== 'all' && selectedMonth && entry.date && !entry.date.startsWith(selectedMonth)) return false;
     return true;
   });
 
   const totalHours = filteredEntries.reduce((acc, curr) => acc + (curr.totalHoursWorked || 0), 0);
   const totalBreaks = filteredEntries.reduce((acc, curr) => acc + (curr.breakDurationMinutes || 0), 0);
+  const activeShiftsCount = filteredEntries.filter((e) => !e.isComplete || !e.clockOut).length;
 
   return (
     <div className="max-w-5xl mx-auto flex flex-col gap-6">
@@ -34,24 +36,66 @@ export const HistoryView: React.FC = () => {
             }`}>
               {isAdmin ? 'Registro General de Plantilla' : 'Mi Historial Laboral'}
             </span>
+            {activeShiftsCount > 0 && (
+              <span className="text-[10px] font-bold text-emerald-700 bg-emerald-50 border border-emerald-200 px-2 py-0.5 rounded-full flex items-center gap-1">
+                <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
+                <span>{activeShiftsCount} en jornada activa</span>
+              </span>
+            )}
           </div>
           <h1 className="font-black text-3xl md:text-4xl text-slate-900 tracking-tight">
             {isAdmin ? 'Control de Jornadas de la Plantilla' : 'Mi Historial de Fichajes'}
           </h1>
           <p className="text-slate-500 text-sm mt-1">
             {isAdmin
-              ? 'Supervisa, audita y exporta los registros horarios de todos los trabajadores de la empresa.'
+              ? 'Supervisa, audita y exporta los registros horarios de todos los trabajadores de la empresa conforme a la normativa ITSS.'
               : 'Consulta tus entradas, salidas, descansos y geolocalización registrada conforme a ley.'}
           </p>
         </div>
 
         <div className="flex flex-wrap gap-2.5 items-center w-full md:w-auto">
+          {/* Quick Month Switcher */}
+          <div className="inline-flex rounded-xl bg-slate-100 p-0.5 text-xs font-bold text-slate-600">
+            <button
+              onClick={() => setSelectedMonth('all')}
+              className={`px-3 py-1.5 rounded-lg transition-all ${
+                selectedMonth === 'all'
+                  ? 'bg-white text-indigo-600 shadow-xs'
+                  : 'hover:text-slate-900'
+              }`}
+            >
+              Todos
+            </button>
+            <button
+              onClick={() => setSelectedMonth('2026-09')}
+              className={`px-3 py-1.5 rounded-lg transition-all ${
+                selectedMonth === '2026-09'
+                  ? 'bg-white text-indigo-600 shadow-xs'
+                  : 'hover:text-slate-900'
+              }`}
+            >
+              Sep 2026
+            </button>
+            <button
+              onClick={() => setSelectedMonth('2026-08')}
+              className={`px-3 py-1.5 rounded-lg transition-all ${
+                selectedMonth === '2026-08'
+                  ? 'bg-white text-indigo-600 shadow-xs'
+                  : 'hover:text-slate-900'
+              }`}
+            >
+              Ago 2026
+            </button>
+          </div>
+
           <input
             type="month"
-            value={selectedMonth}
-            onChange={(e) => setSelectedMonth(e.target.value)}
-            className="bg-white border border-slate-200 px-3 py-2 rounded-xl text-xs font-semibold text-slate-700 shadow-xs focus:ring-2 focus:ring-indigo-500 focus:outline-none"
+            value={selectedMonth === 'all' ? '' : selectedMonth}
+            onChange={(e) => setSelectedMonth(e.target.value || 'all')}
+            className="bg-white border border-slate-200 px-3 py-1.5 rounded-xl text-xs font-semibold text-slate-700 shadow-xs focus:ring-2 focus:ring-indigo-500 focus:outline-none"
+            title="Seleccionar mes personalizado"
           />
+
           {!isAdmin ? (
             <button
               onClick={() => setActiveTab('monthly_sign')}
@@ -123,14 +167,18 @@ export const HistoryView: React.FC = () => {
           </div>
 
           {/* Quick Metrics */}
-          <div className="flex items-center gap-4 border-t md:border-t-0 md:border-l border-slate-100 pt-3 md:pt-0 md:pl-5">
+          <div className="flex items-center gap-6 border-t md:border-t-0 md:border-l border-slate-100 pt-3 md:pt-0 md:pl-5">
             <div>
               <span className="text-[10px] font-bold uppercase text-slate-400 block">Horas Totales</span>
-              <span className="font-black text-lg text-indigo-600">{totalHours.toFixed(1)}h</span>
+              <span className="font-black text-xl text-indigo-600">{totalHours.toFixed(1)}h</span>
             </div>
             <div>
               <span className="text-[10px] font-bold uppercase text-slate-400 block">Pausas Acumuladas</span>
-              <span className="font-black text-lg text-slate-700">{totalBreaks}m</span>
+              <span className="font-black text-xl text-slate-700">{totalBreaks}m</span>
+            </div>
+            <div>
+              <span className="text-[10px] font-bold uppercase text-slate-400 block">Jornadas</span>
+              <span className="font-black text-xl text-slate-900">{filteredEntries.length}</span>
             </div>
           </div>
         </section>
@@ -144,7 +192,9 @@ export const HistoryView: React.FC = () => {
               {isAdmin ? 'Registros Detallados de Jornada' : 'Mis Registros Diarios'}
             </h3>
             <p className="text-xs text-slate-400">
-              Total: {filteredEntries.length} jornadas computadas en el periodo seleccionado
+              {selectedMonth === 'all'
+                ? `Mostrando histórico completo: ${filteredEntries.length} jornadas computadas`
+                : `Total: ${filteredEntries.length} jornadas computadas en ${selectedMonth}`}
             </p>
           </div>
           <span className="text-xs font-bold text-emerald-600 bg-emerald-50 px-3 py-1 rounded-full flex items-center gap-1.5">
@@ -167,101 +217,152 @@ export const HistoryView: React.FC = () => {
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100 text-sm">
-              {filteredEntries.map((row) => (
-                <tr key={row.id} className="hover:bg-slate-50/60 transition-colors">
-                  {isAdmin && (
-                    <td className="px-6 py-4">
-                      <div className="flex items-center gap-2">
-                        <div className="w-7 h-7 rounded-lg bg-indigo-50 text-indigo-700 font-bold flex items-center justify-center text-xs">
-                          {row.userName ? row.userName.slice(0, 2).toUpperCase() : profile.name.slice(0, 2).toUpperCase()}
-                        </div>
-                        <div>
-                          <span className="font-bold text-xs text-slate-900 block">{row.userName || profile.name}</span>
-                          <span className="text-[10px] text-slate-400">{profile.department}</span>
-                        </div>
+              {filteredEntries.length === 0 ? (
+                <tr>
+                  <td colSpan={isAdmin ? 7 : 6} className="px-6 py-12 text-center">
+                    <div className="max-w-md mx-auto flex flex-col items-center gap-3">
+                      <div className="w-12 h-12 rounded-2xl bg-slate-100 text-slate-400 flex items-center justify-center">
+                        <span className="material-symbols-outlined text-2xl">event_busy</span>
                       </div>
-                    </td>
-                  )}
-                  <td className="px-6 py-4">
-                    <span className="font-semibold text-slate-800 block">{row.date}</span>
-                    {row.location?.lat ? (
-                      <span
-                        className="inline-flex items-center gap-1 text-[10px] text-emerald-700 font-mono mt-0.5"
-                        title={`Precisión ±${row.location.accuracy || 5}m - ${row.location.address || 'GPS Verificado'}`}
+                      <div>
+                        <h4 className="font-bold text-slate-800 text-sm">Sin jornadas en el periodo seleccionado</h4>
+                        <p className="text-xs text-slate-400 mt-1">
+                          No se encontraron fichajes para los filtros activos ({selectedMonth === 'all' ? 'todos los meses' : `mes: ${selectedMonth}`}, empleado: {selectedEmployeeId === 'all' ? 'toda la plantilla' : selectedEmployeeId}).
+                        </p>
+                      </div>
+                      <button
+                        onClick={() => {
+                          setSelectedMonth('all');
+                          setSelectedEmployeeId('all');
+                          setSelectedWorkType('all');
+                        }}
+                        className="mt-2 bg-indigo-50 hover:bg-indigo-100 text-indigo-600 px-4 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer"
                       >
-                        <span className="material-symbols-outlined text-xs text-emerald-600">location_on</span>
-                        <span>{row.location.lat.toFixed(3)}°, {row.location.lng.toFixed(3)}°</span>
-                      </span>
-                    ) : (
-                      <span className="inline-flex items-center gap-1 text-[10px] text-slate-400 mt-0.5">
-                        <span className="material-symbols-outlined text-xs">verified</span>
-                        <span>Fichaje Certificado</span>
-                      </span>
-                    )}
-                  </td>
-                  <td className="px-6 py-4">
-                    <div className="flex flex-col gap-1">
-                      <span
-                        className={`inline-flex items-center gap-1 w-fit text-[10px] font-bold uppercase px-2.5 py-0.5 rounded-md ${
-                          row.workType === 'presencial'
-                            ? 'bg-indigo-50 text-indigo-700'
-                            : row.workType === 'teletrabajo'
-                            ? 'bg-emerald-50 text-emerald-700'
-                            : 'bg-amber-50 text-amber-700'
-                        }`}
-                      >
-                        {row.workType === 'presencial' ? '🏢 Presencial' : row.workType === 'teletrabajo' ? '🏠 Teletrabajo' : '🚗 Cliente'}
-                      </span>
-                      <span className="text-[10px] font-bold text-slate-500">
-                        {row.workdayPlan === 'partida' ? '🌗 2 Turnos (Partida)' : '☀️ Turno Continuo'}
-                      </span>
+                        Ver Todos los Meses y Empleados
+                      </button>
                     </div>
                   </td>
-                  <td className="px-6 py-4">
-                    {row.workdayPlan === 'partida' || row.shift2ClockIn ? (
-                      <div className="flex flex-col gap-1 text-xs">
-                        <div className="flex items-center gap-1.5 font-mono">
-                          <span className="text-[10px] font-bold bg-slate-100 text-slate-600 px-1 rounded">T1</span>
-                          <span className="text-emerald-600 font-bold">{row.shift1ClockIn || row.clockIn}</span>
-                          <span className="text-slate-400">→</span>
-                          <span className="text-rose-500 font-bold">{row.shift1ClockOut || '14:00'}</span>
-                        </div>
-                        <div className="flex items-center gap-1.5 font-mono">
-                          <span className="text-[10px] font-bold bg-slate-100 text-slate-600 px-1 rounded">T2</span>
-                          <span className="text-emerald-600 font-bold">{row.shift2ClockIn || '16:00'}</span>
-                          <span className="text-slate-400">→</span>
-                          <span className="text-rose-500 font-bold">{row.shift2ClockOut || row.clockOut || '--:--'}</span>
-                        </div>
-                      </div>
-                    ) : (
-                      <div className="flex items-center gap-1.5 font-mono text-xs">
-                        <span className="text-emerald-600 font-bold">{row.clockIn}</span>
-                        <span className="text-slate-400">→</span>
-                        <span className="text-rose-500 font-bold">{row.clockOut || '--:--'}</span>
-                      </div>
-                    )}
-                  </td>
-                  <td className="px-6 py-4 text-slate-500 font-medium">{row.breakDurationMinutes || 0}m</td>
-                  <td className="px-6 py-4 font-black text-slate-900 text-sm">{row.totalHoursWorked}h</td>
-                  <td className="px-6 py-4 text-right">
-                    {isAdmin ? (
-                      <button
-                        onClick={() => setActiveTab('incidents')}
-                        className="bg-slate-100 hover:bg-indigo-50 hover:text-indigo-600 text-slate-600 px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer"
-                      >
-                        Validar
-                      </button>
-                    ) : (
-                      <button
-                        onClick={() => setActiveTab('incidents')}
-                        className="bg-slate-100 hover:bg-indigo-50 hover:text-indigo-600 text-slate-600 px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer"
-                      >
-                        Subsanar
-                      </button>
-                    )}
-                  </td>
                 </tr>
-              ))}
+              ) : (
+                filteredEntries.map((row) => {
+                  const emp = employees.find((e) => e.id === row.userId || e.fullName === row.userName);
+                  const isOngoing = !row.isComplete || !row.clockOut;
+
+                  return (
+                    <tr key={row.id} className="hover:bg-slate-50/60 transition-colors">
+                      {isAdmin && (
+                        <td className="px-6 py-4">
+                          <div className="flex items-center gap-2.5">
+                            <div className="w-8 h-8 rounded-xl bg-indigo-50 text-indigo-700 font-bold flex items-center justify-center text-xs shrink-0">
+                              {row.userName ? row.userName.slice(0, 2).toUpperCase() : profile.name.slice(0, 2).toUpperCase()}
+                            </div>
+                            <div>
+                              <span className="font-bold text-xs text-slate-900 block">{row.userName || profile.name}</span>
+                              <span className="text-[10px] text-slate-400">{emp?.department || profile.department || 'General'}</span>
+                            </div>
+                          </div>
+                        </td>
+                      )}
+                      <td className="px-6 py-4 whitespace-nowrap">
+                        <span className="font-semibold text-slate-800 block text-xs">{row.date}</span>
+                        {row.location?.lat ? (
+                          <span
+                            className="inline-flex items-center gap-1 text-[10px] text-emerald-700 font-mono mt-0.5"
+                            title={`Precisión ±${row.location.accuracy || 5}m - ${row.location.address || 'GPS Verificado'}`}
+                          >
+                            <span className="material-symbols-outlined text-xs text-emerald-600">location_on</span>
+                            <span>{row.location.lat.toFixed(3)}°, {row.location.lng.toFixed(3)}°</span>
+                          </span>
+                        ) : (
+                          <span className="inline-flex items-center gap-1 text-[10px] text-slate-400 mt-0.5">
+                            <span className="material-symbols-outlined text-xs">verified</span>
+                            <span>Fichaje Certificado</span>
+                          </span>
+                        )}
+                      </td>
+                      <td className="px-6 py-4">
+                        <div className="flex flex-col gap-1">
+                          <span
+                            className={`inline-flex items-center gap-1 w-fit text-[10px] font-bold uppercase px-2.5 py-0.5 rounded-md ${
+                              row.workType === 'presencial'
+                                ? 'bg-indigo-50 text-indigo-700'
+                                : row.workType === 'teletrabajo'
+                                ? 'bg-emerald-50 text-emerald-700'
+                                : 'bg-amber-50 text-amber-700'
+                            }`}
+                          >
+                            {row.workType === 'presencial' ? '🏢 Presencial' : row.workType === 'teletrabajo' ? '🏠 Teletrabajo' : '🚗 Cliente'}
+                          </span>
+                          <span className="text-[10px] font-bold text-slate-500">
+                            {row.workdayPlan === 'partida' ? '🌗 2 Turnos (Partida)' : '☀️ Turno Continuo'}
+                          </span>
+                        </div>
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap">
+                        {row.workdayPlan === 'partida' || row.shift2ClockIn ? (
+                          <div className="flex flex-col gap-1 text-xs">
+                            <div className="flex items-center gap-1.5 font-mono">
+                              <span className="text-[10px] font-bold bg-slate-100 text-slate-600 px-1 rounded">T1</span>
+                              <span className="text-emerald-600 font-bold">{row.shift1ClockIn || row.clockIn}</span>
+                              <span className="text-slate-400">→</span>
+                              <span className="text-rose-500 font-bold">{row.shift1ClockOut || (isOngoing ? 'En curso' : '14:00')}</span>
+                            </div>
+                            <div className="flex items-center gap-1.5 font-mono">
+                              <span className="text-[10px] font-bold bg-slate-100 text-slate-600 px-1 rounded">T2</span>
+                              <span className="text-emerald-600 font-bold">{row.shift2ClockIn || '16:00'}</span>
+                              <span className="text-slate-400">→</span>
+                              <span className="text-rose-500 font-bold">{row.shift2ClockOut || (isOngoing ? 'En curso' : row.clockOut || '--:--')}</span>
+                            </div>
+                          </div>
+                        ) : (
+                          <div className="flex items-center gap-1.5 font-mono text-xs">
+                            <span className="text-emerald-600 font-bold">{row.clockIn}</span>
+                            <span className="text-slate-400">→</span>
+                            {isOngoing ? (
+                              <span className="inline-flex items-center gap-1 text-emerald-600 font-bold bg-emerald-50 px-2 py-0.5 rounded text-[10px]">
+                                <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-ping"></span>
+                                En curso
+                              </span>
+                            ) : (
+                              <span className="text-rose-500 font-bold">{row.clockOut || '--:--'}</span>
+                            )}
+                          </div>
+                        )}
+                      </td>
+                      <td className="px-6 py-4 text-slate-600 font-bold whitespace-nowrap">
+                        {row.breakDurationMinutes || 0}m
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap">
+                        {isOngoing ? (
+                          <span className="inline-flex items-center gap-1 text-emerald-700 bg-emerald-50 border border-emerald-200 px-2.5 py-0.5 rounded-full text-xs font-bold">
+                            <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
+                            En curso
+                          </span>
+                        ) : (
+                          <span className="font-black text-slate-900 text-sm">{row.totalHoursWorked}h</span>
+                        )}
+                      </td>
+                      <td className="px-6 py-4 text-right whitespace-nowrap">
+                        {isAdmin ? (
+                          <button
+                            onClick={() => setActiveTab('incidents')}
+                            className="bg-slate-100 hover:bg-indigo-50 hover:text-indigo-600 text-slate-600 px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer"
+                          >
+                            Validar
+                          </button>
+                        ) : (
+                          <button
+                            onClick={() => setActiveTab('incidents')}
+                            className="bg-slate-100 hover:bg-indigo-50 hover:text-indigo-600 text-slate-600 px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer"
+                          >
+                            Subsanar
+                          </button>
+                        )}
+                      </td>
+                    </tr>
+                  );
+                })
+              )}
             </tbody>
           </table>
         </div>

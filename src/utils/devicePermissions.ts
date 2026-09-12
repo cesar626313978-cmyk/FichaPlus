@@ -1,3 +1,5 @@
+import { ReminderAlertType, EmployeeReminders } from '../types';
+
 // Device Permissions & Mobile Hardware Utilities for PWA
 
 export interface GeoLocationStamp {
@@ -273,3 +275,84 @@ export const playDeviceChime = (type: 'clockIn' | 'clockOut' | 'pause' | 'alarm'
     console.warn('Audio chime warning:', err);
   }
 };
+
+// 7. Voice Speech Synthesis (Emisión de mensajes de voz en español)
+export const speakVoiceNotification = (text: string) => {
+  if (typeof window === 'undefined' || !('speechSynthesis' in window)) return;
+  try {
+    window.speechSynthesis.cancel(); // Stop any pending speech
+    const utterance = new SpeechSynthesisUtterance(text);
+    utterance.lang = 'es-ES';
+    utterance.rate = 1.0;
+    utterance.pitch = 1.0;
+
+    // Look for a Spanish voice if available
+    const voices = window.speechSynthesis.getVoices();
+    const esVoice = voices.find((v) => v.lang.startsWith('es') || v.lang.includes('ES'));
+    if (esVoice) {
+      utterance.voice = esVoice;
+    }
+    window.speechSynthesis.speak(utterance);
+  } catch (err) {
+    console.warn('Speech synthesis error:', err);
+  }
+};
+
+// 8. Unified Reminder Dispatcher (Voz, Vibración, Sonido o Silencioso)
+export const triggerReminderAlert = (
+  alertType: ReminderAlertType,
+  title: string,
+  message: string,
+  url: string = '/'
+) => {
+  if (alertType === 'off') return;
+
+  // 1. Always emit local/system PWA notification if permitted
+  sendLocalNotification(title, message, url);
+
+  // 2. Hardware / Audio action based on alert type
+  switch (alertType) {
+    case 'voice':
+      speakVoiceNotification(message);
+      triggerHaptic('alarm');
+      break;
+    case 'vibration':
+      triggerHaptic('alarm');
+      break;
+    case 'sound':
+      playDeviceChime('alarm');
+      break;
+    case 'silent':
+      // Notification banner only (already sent)
+      break;
+    default:
+      break;
+  }
+};
+
+// 9. Default Reminders Profile for any Employee
+export const getDefaultEmployeeReminders = (fullName?: string): EmployeeReminders => {
+  const firstName = fullName ? fullName.trim().split(' ')[0] : 'compañero/a';
+  return {
+    enabled: true,
+    clockIn: {
+      enabled: true,
+      alertType: 'voice',
+      leadMinutes: 5,
+      customMessage: `¡Hola ${firstName}! Tu jornada comienza en 5 minutos. Recuerda registrar tu entrada.`,
+    },
+    clockOut: {
+      enabled: true,
+      alertType: 'voice',
+      leadMinutes: 0,
+      customMessage: `¡Gran trabajo hoy ${firstName}! Has alcanzado el horario de salida. Recuerda registrar tu fin de jornada.`,
+    },
+    shift2: {
+      enabled: true,
+      alertType: 'sound',
+      leadMinutes: 5,
+      customMessage: `¡Hola ${firstName}! Recuerda registrar la entrada a tu segundo turno.`,
+    },
+  };
+};
+

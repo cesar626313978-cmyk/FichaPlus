@@ -1,5 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { useApp } from '../context/AppContext';
+import { useAuth } from '../context/AuthContext';
+import { EmployeeRemindersModal } from './EmployeeRemindersModal';
+import { EmployeeRecord, EmployeeReminders } from '../types';
 import {
   requestHighAccuracyPosition,
   requestPushNotificationPermission,
@@ -28,7 +31,10 @@ export const DevicePermissionsModal: React.FC<DevicePermissionsModalProps> = ({
     deferredPrompt,
     isAppInstalled,
     markAppAsInstalled,
+    employees,
+    updateEmployeeReminders,
   } = useApp();
+  const { profile } = useAuth();
 
   const [deviceInfo, setDeviceInfo] = useState<DeviceStatus | null>(null);
   const [testNotificationSent, setTestNotificationSent] = useState(false);
@@ -36,6 +42,14 @@ export const DevicePermissionsModal: React.FC<DevicePermissionsModalProps> = ({
   const [localCoords, setLocalCoords] = useState<GeoLocationStamp | null>(locationStamp);
   const [locating, setLocating] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
+  const [showPersonalReminders, setShowPersonalReminders] = useState(false);
+
+  const currentEmp: EmployeeRecord | undefined = employees.find(
+    (e) =>
+      e.id === profile?.id ||
+      (e.email && profile?.email && e.email.toLowerCase() === profile.email.toLowerCase()) ||
+      (e.fullName && profile?.name && e.fullName.toLowerCase() === profile.name.toLowerCase())
+  ) || employees[0];
 
   useEffect(() => {
     if (isOpen) {
@@ -225,14 +239,26 @@ export const DevicePermissionsModal: React.FC<DevicePermissionsModalProps> = ({
                 <span>Activar Notificaciones en Este Teléfono</span>
               </button>
             ) : (
-              <div className="flex gap-2">
-                <button
-                  onClick={handleSendTestPush}
-                  className="flex-1 bg-white hover:bg-slate-100 border border-slate-200 text-slate-800 font-bold text-xs py-2.5 px-3 rounded-xl transition-all flex items-center justify-center gap-1.5 cursor-pointer shadow-xs"
-                >
-                  <span className="material-symbols-outlined text-base text-amber-500">send</span>
-                  <span>{testNotificationSent ? '¡Aviso Enviado!' : 'Enviar Notificación de Prueba'}</span>
-                </button>
+              <div className="space-y-2">
+                <div className="flex gap-2">
+                  <button
+                    onClick={handleSendTestPush}
+                    className="flex-1 bg-white hover:bg-slate-100 border border-slate-200 text-slate-800 font-bold text-xs py-2.5 px-3 rounded-xl transition-all flex items-center justify-center gap-1.5 cursor-pointer shadow-xs"
+                  >
+                    <span className="material-symbols-outlined text-base text-amber-500">send</span>
+                    <span>{testNotificationSent ? '¡Aviso Enviado!' : 'Enviar Notificación de Prueba'}</span>
+                  </button>
+                </div>
+
+                {currentEmp && (
+                  <button
+                    onClick={() => setShowPersonalReminders(true)}
+                    className="w-full bg-indigo-50 hover:bg-indigo-100 border border-indigo-200 text-indigo-900 font-extrabold text-xs py-2.5 px-3 rounded-xl transition-all flex items-center justify-center gap-2 cursor-pointer shadow-xs"
+                  >
+                    <span className="material-symbols-outlined text-base text-indigo-600">tune</span>
+                    <span>Personalizar Mis Recordatorios (Voz, Vibración, Sonido)</span>
+                  </button>
+                )}
               </div>
             )}
           </div>
@@ -322,6 +348,17 @@ export const DevicePermissionsModal: React.FC<DevicePermissionsModalProps> = ({
           </button>
         </div>
       </div>
+
+      {showPersonalReminders && currentEmp && (
+        <EmployeeRemindersModal
+          isOpen={showPersonalReminders}
+          onClose={() => setShowPersonalReminders(false)}
+          employee={currentEmp}
+          onSave={async (reminders) => {
+            await updateEmployeeReminders(currentEmp.id, reminders);
+          }}
+        />
+      )}
     </div>
   );
 };

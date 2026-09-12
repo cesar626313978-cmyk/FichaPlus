@@ -28,6 +28,7 @@ import {
   WorkdayPlanType,
   ShiftDetail,
   ActivePunchDoc,
+  EmployeeReminders,
 } from '../types';
 import { generateSHA256 } from '../utils/crypto';
 import {
@@ -37,8 +38,10 @@ import {
   sendLocalNotification,
   triggerHaptic,
   playDeviceChime,
+  triggerReminderAlert,
+  getDefaultEmployeeReminders,
 } from '../utils/devicePermissions';
-import { getEmployeeShiftInfo, EmployeeShiftInfo } from '../utils/shiftUtils';
+import { getEmployeeShiftInfo, EmployeeShiftInfo, parseShiftString } from '../utils/shiftUtils';
 import {
   getNextEmployeeNumber,
   reconcileAndDeduplicateEmployees,
@@ -51,6 +54,7 @@ import {
   getPunchDocKey,
   formatYearMonthLabel,
 } from '../utils/employeeUtils';
+import { generateCompanyTimeEntries } from '../utils/timeEntryUtils';
 
 interface AppContextType {
   // Navigation
@@ -106,9 +110,12 @@ interface AppContextType {
   // Actions
   addEmployee: (emp: Omit<EmployeeRecord, 'id'>) => Promise<EmployeeRecord>;
   updateEmployee: (id: string, emp: Partial<EmployeeRecord>) => Promise<void>;
+  updateEmployeeReminders: (id: string, reminders: EmployeeReminders) => Promise<void>;
   deleteEmployee: (id: string) => Promise<void>;
 
-  addTimeOffRequest: (req: Omit<TimeOffRequest, 'id' | 'createdAt' | 'status'>) => Promise<void>;
+  addTimeOffRequest: (req: Omit<TimeOffRequest, 'id' | 'createdAt' | 'status'> & { status?: 'PENDIENTE' | 'APROBADO' | 'RECHAZADO'; reviewedBy?: string }) => Promise<void>;
+  vacationPlanningEmployeeId: string | null;
+  setVacationPlanningEmployeeId: (id: string | null) => void;
   approveTimeOffRequest: (id: string) => Promise<void>;
   rejectTimeOffRequest: (id: string) => Promise<void>;
   deleteTimeOffRequest: (id: string) => Promise<void>;
@@ -281,6 +288,7 @@ const AppContext = createContext<AppContextType | undefined>(undefined);
 export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const { profile } = useAuth();
   const [activeTab, setActiveTab] = useState<any>('dashboard');
+  const [vacationPlanningEmployeeId, setVacationPlanningEmployeeId] = useState<string | null>(null);
 
   // Lists
   const [employees, setEmployees] = useState<EmployeeRecord[]>(() => {
@@ -537,11 +545,12 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       if (saved) {
         const parsed = JSON.parse(saved);
         if (Array.isArray(parsed)) {
-          return parsed.filter((e) => !isMockEntryId(e.id));
+          const cleaned = parsed.filter((e) => !isMockEntryId(e.id));
+          if (cleaned.length > 0) return cleaned;
         }
       }
     } catch {}
-    return [];
+    return generateCompanyTimeEntries(INITIAL_EMPLOYEES);
   });
 
   const [monthlyRecord, setMonthlyRecord] = useState<MonthlyRecord>(() => {
@@ -1073,6 +1082,126 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     };
   }, [isClockedIn, isPaused, clockInTimestamp, pausedAtTimestamp, accumulatedPauseSeconds]);
 
+  // Automated Shift Reminder Engine (Evaluates shift schedule vs current device time)
+  useEffect(() => {
+    const checkShiftReminders = () => {
+      if (typeof window === 'undefined' || !profile?.name) return;
+
+      const currentEmp = employees.find(
+        (e) =>
+          e.id === profile.id ||
+          (e.email && profile.email && e.email.toLowerCase() === profile.email.toLowerCase()) ||
+          (e.fullName && profile.name && e.fullName.toLowerCase() === profile.name.toLowerCase())
+      );
+
+      if (!currentEmp) return;
+
+      const cfg: EmployeeReminders =
+        currentEmp.reminders || getDefaultEmployeeReminders(currentEmp.fullName);
+
+      if (!cfg.enabled) return;
+
+      const now = new Date();
+      const todayDateStr = now.toISOString().slice(0, 10);
+      const currentMinutes = now.getHours() * 60 + now.getMinutes();
+
+      // Shift info for today
+      const shiftInfo = getEmployeeShiftInfo(currentEmp, now);
+      if (shiftInfo.isDayOffToday) return;
+
+      const parsedShift = parseShiftString(shiftInfo.activeShiftName);
+
+      // 1. Clock-in Reminder (Start of shift)
+      if (cfg.clockIn.enabled && cfg.clockIn.alertType !== 'off' && !isClockedIn) {
+        const startTimeStr = parsedShift.type === 'continua' ? parsedShift.cStart : parsedShift.t1Start;
+        const [sH, sM] = startTimeStr.split(':').map(Number);
+        if (!isNaN(sH) && !isNaN(sM)) {
+          const shiftStartMins = sH * 60 + sM;
+          const triggerMins = shiftStartMins - (cfg.clockIn.leadMinutes || 0);
+
+          if (currentMinutes >= triggerMins && currentMinutes < triggerMins + 6) {
+            const flagKey = `fichaplus_remind_in_${currentEmp.id}_${todayDateStr}`;
+            if (!localStorage.getItem(flagKey)) {
+              localStorage.setItem(flagKey, 'true');
+              const msg =
+                cfg.clockIn.customMessage ||
+                `¡Hola ${currentEmp.fullName.split(' ')[0]}! Tu turno inicia a las ${startTimeStr}. Recuerda registrar tu entrada en FichaPlus.`;
+
+              triggerReminderAlert(
+                cfg.clockIn.alertType,
+                '⏰ Recordatorio de Entrada - FichaPlus',
+                msg
+              );
+
+              const notif: AppNotification = {
+                id: `remind-in-${Date.now()}`,
+                title: '⏰ Recordatorio de Inicio de Jornada',
+                message: msg,
+                timestamp: new Date().toISOString(),
+                type: 'info',
+                read: false,
+              };
+              setNotifications((prev) => [notif, ...prev]);
+            }
+          }
+        }
+      }
+
+      // 2. Clock-out Reminder (End of shift)
+      if (cfg.clockOut.enabled && cfg.clockOut.alertType !== 'off' && isClockedIn) {
+        const endTimeStr = parsedShift.type === 'continua' ? parsedShift.cEnd : parsedShift.t2End;
+        const [eH, eM] = endTimeStr.split(':').map(Number);
+        if (!isNaN(eH) && !isNaN(eM)) {
+          const shiftEndMins = eH * 60 + eM;
+          const triggerMins = shiftEndMins - (cfg.clockOut.leadMinutes || 0);
+
+          if (currentMinutes >= triggerMins && currentMinutes < triggerMins + 6) {
+            const flagKey = `fichaplus_remind_out_${currentEmp.id}_${todayDateStr}`;
+            if (!localStorage.getItem(flagKey)) {
+              localStorage.setItem(flagKey, 'true');
+              const msg =
+                cfg.clockOut.customMessage ||
+                `¡Buen trabajo hoy ${currentEmp.fullName.split(' ')[0]}! Has completado tu horario previsto. Recuerda registrar tu salida.`;
+
+              triggerReminderAlert(
+                cfg.clockOut.alertType,
+                '🏁 Recordatorio de Fin de Jornada - FichaPlus',
+                msg
+              );
+
+              const notif: AppNotification = {
+                id: `remind-out-${Date.now()}`,
+                title: '🏁 Recordatorio de Fin de Jornada',
+                message: msg,
+                timestamp: new Date().toISOString(),
+                type: 'info',
+                read: false,
+              };
+              setNotifications((prev) => [notif, ...prev]);
+            }
+          }
+        }
+      }
+    };
+
+    checkShiftReminders();
+    const reminderTimer = setInterval(checkShiftReminders, 25000);
+
+    const onWake = () => checkShiftReminders();
+    if (typeof window !== 'undefined') {
+      window.addEventListener('focus', onWake);
+      document.addEventListener('visibilitychange', onWake);
+    }
+
+    return () => {
+      clearInterval(reminderTimer);
+      if (typeof window !== 'undefined') {
+        window.removeEventListener('focus', onWake);
+        document.removeEventListener('visibilitychange', onWake);
+      }
+    };
+  }, [employees, profile, isClockedIn]);
+
   const [isCloudConnected, setIsCloudConnected] = useState<boolean>(true);
   const [isSyncingCloud, setIsSyncingCloud] = useState<boolean>(false);
 
@@ -1417,6 +1546,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     );
   };
 
+  const updateEmployeeReminders = async (id: string, reminders: EmployeeReminders) => {
+    await updateEmployee(id, { reminders });
+  };
+
   const deleteEmployee = async (id: string) => {
     // Strictly protect the Master Administrator from deletion
     if (id === 'emp-001') {
@@ -1730,6 +1863,13 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     const safeDurationHours = calculatedHours > 0 ? calculatedHours : (rawSeconds > 0 ? 0.01 : 0);
     const finalActiveEntryId = activeEntryId;
 
+    // Calculate final accumulated pause minutes (including if currently unpaused/in pause right now)
+    const ongoingPauseSecs = (isPaused && pausedAtTimestamp)
+      ? Math.max(0, Math.floor((now.getTime() - pausedAtTimestamp) / 1000))
+      : 0;
+    const totalPauseSecs = (accumulatedPauseSeconds || 0) + ongoingPauseSecs;
+    const finalBreakDurationMinutes = Math.round(totalPauseSecs / 60);
+
     // Reset ALL in-memory shift states immediately
     setIsClockedIn(false);
     setIsPaused(false);
@@ -1804,6 +1944,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
                 clockOut: timeShort,
                 shift1ClockOut: timeShort,
                 shift1DurationHours: safeDurationHours,
+                breakDurationMinutes: Math.max(item.breakDurationMinutes || 0, finalBreakDurationMinutes),
                 totalHoursWorked: safeDurationHours,
                 isComplete: true,
               }
@@ -1823,6 +1964,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
               clockOut: timeShort,
               shift1ClockOut: timeShort,
               shift1DurationHours: safeDurationHours,
+              breakDurationMinutes: finalBreakDurationMinutes,
               totalHoursWorked: safeDurationHours,
               isComplete: true,
             },
@@ -1863,6 +2005,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
                 clockOut: timeShort,
                 shift2ClockOut: workdayPlan === 'partida' ? timeShort : undefined,
                 shift2DurationHours: workdayPlan === 'partida' ? safeDurationHours : undefined,
+                breakDurationMinutes: Math.max(item.breakDurationMinutes || 0, finalBreakDurationMinutes),
                 totalHoursWorked: totalDayHours,
                 isComplete: true,
               }
@@ -1882,6 +2025,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
               clockOut: timeShort,
               shift2ClockOut: workdayPlan === 'partida' ? timeShort : undefined,
               shift2DurationHours: workdayPlan === 'partida' ? safeDurationHours : undefined,
+              breakDurationMinutes: finalBreakDurationMinutes,
               totalHoursWorked: totalDayHours,
               isComplete: true,
             },
@@ -1940,13 +2084,19 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }
   };
 
-  const addTimeOffRequest = async (req: Omit<TimeOffRequest, 'id' | 'createdAt' | 'status'>) => {
+  const addTimeOffRequest = async (
+    req: Omit<TimeOffRequest, 'id' | 'createdAt' | 'status'> & {
+      status?: 'PENDIENTE' | 'APROBADO' | 'RECHAZADO';
+      reviewedBy?: string;
+    }
+  ) => {
     const id = `req-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
     const newReq: TimeOffRequest = {
       ...req,
       id,
-      status: 'PENDIENTE',
+      status: req.status || 'PENDIENTE',
       createdAt: new Date().toISOString().slice(0, 10),
+      reviewedBy: req.reviewedBy,
     };
     setTimeOffRequests((prev) => [newReq, ...prev.filter((r) => r.id !== id)]);
     try {
@@ -2615,6 +2765,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         employees,
         addEmployee,
         updateEmployee,
+        updateEmployeeReminders,
         deleteEmployee,
         timeEntries,
         monthlyRecord,
@@ -2629,6 +2780,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         approveAccessRequest,
         rejectAccessRequest,
         addTimeOffRequest,
+        vacationPlanningEmployeeId,
+        setVacationPlanningEmployeeId,
         approveTimeOffRequest,
         rejectTimeOffRequest,
         deleteTimeOffRequest,
