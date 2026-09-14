@@ -75,7 +75,7 @@ export const DesktopNav: React.FC = () => {
   const navItems = isAdmin ? adminNavItems : employeeNavItems;
 
   return (
-    <aside className="hidden lg:flex flex-col w-72 h-[calc(100vh-4.25rem)] sticky top-[4.25rem] bg-white border-r border-slate-200 shadow-xs p-5 shrink-0 overflow-y-auto">
+    <aside className="hidden lg:flex flex-col w-72 h-[calc(100vh-4.25rem)] sticky top-[4.25rem] bg-white border-r border-slate-200 shadow-xs p-5 shrink-0 overflow-y-auto no-print">
       {/* User Info Card */}
       <div className={`rounded-3xl p-4 text-white shadow-md mb-5 transition-all ${
         isAdmin 

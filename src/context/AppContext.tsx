@@ -114,6 +114,7 @@ interface AppContextType {
   deleteEmployee: (id: string) => Promise<void>;
 
   addTimeOffRequest: (req: Omit<TimeOffRequest, 'id' | 'createdAt' | 'status'> & { status?: 'PENDIENTE' | 'APROBADO' | 'RECHAZADO'; reviewedBy?: string }) => Promise<void>;
+  updateTimeOffRequest: (id: string, updates: Partial<TimeOffRequest>) => Promise<void>;
   vacationPlanningEmployeeId: string | null;
   setVacationPlanningEmployeeId: (id: string | null) => void;
   approveTimeOffRequest: (id: string) => Promise<void>;
@@ -572,7 +573,12 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       if (saved) {
         const parsed = JSON.parse(saved);
         if (Array.isArray(parsed)) {
-          return parsed.filter((r) => !isMockRequestId(r.id));
+          return parsed.filter(
+            (r) =>
+              !isMockRequestId(r.id) &&
+              !isMockRequestId(r.internalId) &&
+              Boolean(r.userName || r.userId || r.startDate || r.daysCount)
+          );
         }
       }
     } catch {}
@@ -1346,8 +1352,21 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         (snap) => {
           if (!snap.empty) {
             const list = snap.docs
-              .map((d) => ({ id: d.id, ...d.data() } as TimeOffRequest))
-              .filter((r) => !isMockRequestId(r.id));
+              .map((d) => {
+                const data = d.data() as Partial<TimeOffRequest> & { internalId?: string };
+                return {
+                  ...data,
+                  id: d.id,
+                  _firestoreDocId: d.id,
+                  internalId: data.id || d.id,
+                } as TimeOffRequest;
+              })
+              .filter((r) => {
+                if (isMockRequestId(r.id) || isMockRequestId((r as any).internalId)) return false;
+                // Exclude invalid empty/corrupt records that lack both dates, days, and user
+                if (!r.userName && !r.userId && !r.startDate && !r.daysCount) return false;
+                return true;
+              });
             setTimeOffRequests(list);
           }
         },
@@ -2112,9 +2131,19 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
 
   const approveTimeOffRequest = async (id: string) => {
-    setTimeOffRequests((prev) =>
-      prev.map((r) => (r.id === id ? { ...r, status: 'APROBADO', reviewedBy: profile.name } : r))
+    const reviewer = profile.name || 'Dirección / RRHH';
+    const target = timeOffRequests.find(
+      (r) => r.id === id || (r as any)._firestoreDocId === id || (r as any).internalId === id
     );
+
+    setTimeOffRequests((prev) =>
+      prev.map((r) =>
+        r.id === id || (r as any)._firestoreDocId === id || (r as any).internalId === id
+          ? { ...r, status: 'APROBADO', reviewedBy: reviewer }
+          : r
+      )
+    );
+
     try {
       const saved = localStorage.getItem('fichaplus_requests');
       if (saved) {
@@ -2123,22 +2152,49 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           localStorage.setItem(
             'fichaplus_requests',
             JSON.stringify(
-              parsed.map((r: any) => (r.id === id ? { ...r, status: 'APROBADO', reviewedBy: profile.name } : r))
+              parsed.map((r: any) =>
+                r.id === id || r._firestoreDocId === id || r.internalId === id
+                  ? { ...r, status: 'APROBADO', reviewedBy: reviewer }
+                  : r
+              )
             )
           );
         }
       }
     } catch {}
+
+    const firestoreDocId = (target as any)?._firestoreDocId || target?.id || id;
+    const fullPayload = target
+      ? { ...target, status: 'APROBADO', reviewedBy: reviewer }
+      : { status: 'APROBADO', reviewedBy: reviewer };
+
     await safeFirestoreWrite(
-      setDoc(doc(db, 'time_off_requests', id), { status: 'APROBADO', reviewedBy: profile.name }, { merge: true }),
+      setDoc(doc(db, 'time_off_requests', firestoreDocId), fullPayload, { merge: true }),
       800
     );
+
+    if ((target as any)?.internalId && (target as any).internalId !== firestoreDocId) {
+      await safeFirestoreWrite(
+        setDoc(doc(db, 'time_off_requests', (target as any).internalId), fullPayload, { merge: true }),
+        800
+      );
+    }
   };
 
   const rejectTimeOffRequest = async (id: string) => {
-    setTimeOffRequests((prev) =>
-      prev.map((r) => (r.id === id ? { ...r, status: 'RECHAZADO', reviewedBy: profile.name } : r))
+    const reviewer = profile.name || 'Dirección / RRHH';
+    const target = timeOffRequests.find(
+      (r) => r.id === id || (r as any)._firestoreDocId === id || (r as any).internalId === id
     );
+
+    setTimeOffRequests((prev) =>
+      prev.map((r) =>
+        r.id === id || (r as any)._firestoreDocId === id || (r as any).internalId === id
+          ? { ...r, status: 'RECHAZADO', reviewedBy: reviewer }
+          : r
+      )
+    );
+
     try {
       const saved = localStorage.getItem('fichaplus_requests');
       if (saved) {
@@ -2147,30 +2203,122 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           localStorage.setItem(
             'fichaplus_requests',
             JSON.stringify(
-              parsed.map((r: any) => (r.id === id ? { ...r, status: 'RECHAZADO', reviewedBy: profile.name } : r))
+              parsed.map((r: any) =>
+                r.id === id || r._firestoreDocId === id || r.internalId === id
+                  ? { ...r, status: 'RECHAZADO', reviewedBy: reviewer }
+                  : r
+              )
             )
           );
         }
       }
     } catch {}
+
+    const firestoreDocId = (target as any)?._firestoreDocId || target?.id || id;
+    const fullPayload = target
+      ? { ...target, status: 'RECHAZADO', reviewedBy: reviewer }
+      : { status: 'RECHAZADO', reviewedBy: reviewer };
+
     await safeFirestoreWrite(
-      setDoc(doc(db, 'time_off_requests', id), { status: 'RECHAZADO', reviewedBy: profile.name }, { merge: true }),
+      setDoc(doc(db, 'time_off_requests', firestoreDocId), fullPayload, { merge: true }),
       800
     );
+
+    if ((target as any)?.internalId && (target as any).internalId !== firestoreDocId) {
+      await safeFirestoreWrite(
+        setDoc(doc(db, 'time_off_requests', (target as any).internalId), fullPayload, { merge: true }),
+        800
+      );
+    }
   };
 
-  const deleteTimeOffRequest = async (id: string) => {
-    setTimeOffRequests((prev) => prev.filter((r) => r.id !== id));
+  const updateTimeOffRequest = async (id: string, updates: Partial<TimeOffRequest>) => {
+    const target = timeOffRequests.find(
+      (r) => r.id === id || (r as any)._firestoreDocId === id || (r as any).internalId === id
+    );
+
+    const updatedItem = target ? { ...target, ...updates } : null;
+
+    setTimeOffRequests((prev) =>
+      prev.map((r) =>
+        r.id === id || (r as any)._firestoreDocId === id || (r as any).internalId === id
+          ? { ...r, ...updates }
+          : r
+      )
+    );
+
     try {
       const saved = localStorage.getItem('fichaplus_requests');
       if (saved) {
         const parsed = JSON.parse(saved);
         if (Array.isArray(parsed)) {
-          localStorage.setItem('fichaplus_requests', JSON.stringify(parsed.filter((r: any) => r.id !== id)));
+          localStorage.setItem(
+            'fichaplus_requests',
+            JSON.stringify(
+              parsed.map((r: any) =>
+                r.id === id || r._firestoreDocId === id || r.internalId === id
+                  ? { ...r, ...updates }
+                  : r
+              )
+            )
+          );
         }
       }
     } catch {}
-    await safeFirestoreWrite(deleteDoc(doc(db, 'time_off_requests', id)), 800);
+
+    const firestoreDocId = (target as any)?._firestoreDocId || target?.id || id;
+    if (updatedItem) {
+      await safeFirestoreWrite(
+        setDoc(doc(db, 'time_off_requests', firestoreDocId), updatedItem, { merge: true }),
+        800
+      );
+
+      if ((target as any)?.internalId && (target as any).internalId !== firestoreDocId) {
+        await safeFirestoreWrite(
+          setDoc(doc(db, 'time_off_requests', (target as any).internalId), updatedItem, { merge: true }),
+          800
+        );
+      }
+    }
+  };
+
+  const deleteTimeOffRequest = async (id: string) => {
+    const target = timeOffRequests.find(
+      (r) => r.id === id || (r as any)._firestoreDocId === id || (r as any).internalId === id
+    );
+
+    setTimeOffRequests((prev) =>
+      prev.filter(
+        (r) => r.id !== id && (r as any)._firestoreDocId !== id && (r as any).internalId !== id
+      )
+    );
+
+    try {
+      const saved = localStorage.getItem('fichaplus_requests');
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed)) {
+          localStorage.setItem(
+            'fichaplus_requests',
+            JSON.stringify(
+              parsed.filter(
+                (r: any) => r.id !== id && r._firestoreDocId !== id && r.internalId !== id
+              )
+            )
+          );
+        }
+      }
+    } catch {}
+
+    const firestoreDocId = (target as any)?._firestoreDocId || target?.id || id;
+    await safeFirestoreWrite(deleteDoc(doc(db, 'time_off_requests', firestoreDocId)), 800);
+
+    if ((target as any)?.internalId && (target as any).internalId !== firestoreDocId) {
+      await safeFirestoreWrite(deleteDoc(doc(db, 'time_off_requests', (target as any).internalId)), 800);
+    }
+    if (id !== firestoreDocId) {
+      await safeFirestoreWrite(deleteDoc(doc(db, 'time_off_requests', id)), 800);
+    }
   };
 
   const addIncident = async (inc: Omit<Incident, 'id' | 'createdAt' | 'status'>) => {
@@ -2784,6 +2932,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         approveAccessRequest,
         rejectAccessRequest,
         addTimeOffRequest,
+        updateTimeOffRequest,
         vacationPlanningEmployeeId,
         setVacationPlanningEmployeeId,
         approveTimeOffRequest,

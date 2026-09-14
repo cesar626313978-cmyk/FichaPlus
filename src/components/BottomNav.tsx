@@ -49,7 +49,7 @@ export const BottomNav: React.FC = () => {
     : standardEmployeeItems;
 
   return (
-    <nav className="md:hidden fixed bottom-0 left-0 w-full z-50 bg-white/95 backdrop-blur-md border-t border-slate-200 h-18 flex justify-around items-center px-3 pb-safe shadow-lg">
+    <nav className="md:hidden fixed bottom-0 left-0 w-full z-50 bg-white/95 backdrop-blur-md border-t border-slate-200 h-18 flex justify-around items-center px-3 pb-safe shadow-lg no-print">
       {items.map((item) => {
         const isActive = !item.isRoleSwitch && activeTab === item.id;
         const isSwitch = item.isRoleSwitch;

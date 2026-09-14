@@ -11,7 +11,7 @@ export const Header: React.FC = () => {
   const isAdmin = profile.role === 'admin' || profile.role === 'manager';
 
   return (
-    <header className="w-full top-0 sticky bg-white border-b border-slate-200 shadow-xs z-40">
+    <header className="w-full top-0 sticky bg-white border-b border-slate-200 shadow-xs z-40 no-print">
       <div className="flex justify-between items-center px-4 md:px-8 py-3.5 max-w-[1440px] mx-auto">
         <div className="flex items-center gap-3">
           <button

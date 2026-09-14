@@ -3,6 +3,11 @@ import { useApp } from '../context/AppContext';
 import { useAuth } from '../context/AuthContext';
 import { UserAvatar } from '../components/UserAvatar';
 import { EmployeeRecord, TimeOffRequest } from '../types';
+import { VacationAuditorView } from '../components/VacationAuditorView';
+import { PrintableVacationStaffCalendar } from '../components/PrintableVacationStaffCalendar';
+import { EditVacationModal } from '../components/EditVacationModal';
+import { analyzeSingleVacationRequest } from '../utils/vacationWeekendUtils';
+import { getEffectiveSaturdayPlan } from '../utils/shiftUtils';
 
 function calculateCalendarDays(startStr: string, endStr: string): number {
   if (!startStr || !endStr) return 0;
@@ -35,7 +40,9 @@ export const RequestsView: React.FC = () => {
   const {
     employees,
     timeOffRequests,
+    companySettings,
     addTimeOffRequest,
+    updateTimeOffRequest,
     approveTimeOffRequest,
     rejectTimeOffRequest,
     deleteTimeOffRequest,
@@ -44,6 +51,14 @@ export const RequestsView: React.FC = () => {
   } = useApp();
   const { profile } = useAuth();
   const isAdmin = profile.role === 'admin' || profile.role === 'manager';
+
+  const todayStr = useMemo(() => {
+    const d = new Date();
+    const year = d.getFullYear();
+    const month = String(d.getMonth() + 1).padStart(2, '0');
+    const day = String(d.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
+  }, []);
 
   // Find logged in employee
   const currentEmp = useMemo(() => {
@@ -58,6 +73,9 @@ export const RequestsView: React.FC = () => {
     );
   }, [employees, profile]);
 
+  // Sub-tabs: 'cuadrante' (Hoja Imprimible Anual de Plantilla) vs 'auditor' (Regla 4 FDS) vs 'form' (Planificación) vs 'history'
+  const [activeSubTab, setActiveSubTab] = useState<'cuadrante' | 'auditor' | 'form' | 'history'>('cuadrante');
+
   // Selected employee target for planning/requests
   const [selectedEmployeeId, setSelectedEmployeeId] = useState<string>(
     vacationPlanningEmployeeId || currentEmp?.id || (employees[0]?.id ?? '')
@@ -66,6 +84,7 @@ export const RequestsView: React.FC = () => {
   useEffect(() => {
     if (vacationPlanningEmployeeId) {
       setSelectedEmployeeId(vacationPlanningEmployeeId);
+      setActiveSubTab('form');
       setTimeout(() => {
         const el = document.getElementById('vacation-planning-form');
         if (el) {
@@ -89,9 +108,12 @@ export const RequestsView: React.FC = () => {
   const [submitSuccess, setSubmitSuccess] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  // History filtering
+  // History filtering & editing
   const [historyFilterEmp, setHistoryFilterEmp] = useState<string>('TODOS');
   const [historyFilterStatus, setHistoryFilterStatus] = useState<string>('TODOS');
+  const [historyFilterTime, setHistoryFilterTime] = useState<'TODOS' | 'PASADAS' | 'FUTURAS' | 'PENDIENTES'>('TODOS');
+  const [historySearchTerm, setHistorySearchTerm] = useState<string>('');
+  const [editingRequest, setEditingRequest] = useState<TimeOffRequest | null>(null);
 
   // Stats calculation for target employee
   const targetTotalAllocated = targetEmp?.vacationDays ?? 30;
@@ -137,13 +159,40 @@ export const RequestsView: React.FC = () => {
   }, [suggestedDays]);
 
   // Today check for past dates
-  const todayStr = useMemo(() => new Date().toISOString().slice(0, 10), []);
   const isPastPeriod = useMemo(() => {
     if (!startDate) return false;
     return startDate < todayStr || (endDate && endDate < todayStr);
   }, [startDate, endDate, todayStr]);
 
+  // Live analysis of weekends, working Saturdays, and off Saturdays for current selection
+  const livePeriodAnalysis = useMemo(() => {
+    if (!startDate || !endDate || !targetEmp) return null;
+    return analyzeSingleVacationRequest(
+      {
+        id: 'preview',
+        userId: targetEmp.id,
+        userName: targetEmp.fullName,
+        department: targetEmp.department || '',
+        leaveType,
+        startDate,
+        endDate,
+        daysCount: typeof customDaysCount === 'number' ? customDaysCount : suggestedDays,
+        status: 'PENDIENTE',
+        createdAt: '',
+      },
+      targetEmp
+    );
+  }, [startDate, endDate, targetEmp, leaveType, customDaysCount, suggestedDays]);
+
   const pendingRequests = useMemo(() => timeOffRequests.filter((r) => r.status === 'PENDIENTE'), [timeOffRequests]);
+
+  const pastRequestsCount = useMemo(() => {
+    return timeOffRequests.filter((r) => r.endDate && r.endDate < todayStr).length;
+  }, [timeOffRequests, todayStr]);
+
+  const futureRequestsCount = useMemo(() => {
+    return timeOffRequests.filter((r) => r.startDate && r.startDate >= todayStr).length;
+  }, [timeOffRequests, todayStr]);
 
   const myRequests = useMemo(() => {
     return timeOffRequests.filter(
@@ -156,6 +205,9 @@ export const RequestsView: React.FC = () => {
 
   const displayedHistory = useMemo(() => {
     let list = isAdmin ? timeOffRequests : myRequests;
+    // Defensive check: filter out empty or incomplete items
+    list = list.filter((r) => r && Boolean(r.userName || r.userId) && Boolean(r.startDate || r.daysCount));
+
     if (isAdmin && historyFilterEmp !== 'TODOS') {
       list = list.filter(
         (r) =>
@@ -167,8 +219,40 @@ export const RequestsView: React.FC = () => {
     if (historyFilterStatus !== 'TODOS') {
       list = list.filter((r) => r.status === historyFilterStatus);
     }
-    return list;
-  }, [isAdmin, timeOffRequests, myRequests, historyFilterEmp, historyFilterStatus, employees]);
+    if (historyFilterTime === 'PASADAS') {
+      list = list.filter((r) => Boolean(r.endDate && r.endDate < todayStr));
+    } else if (historyFilterTime === 'FUTURAS') {
+      list = list.filter((r) => Boolean(r.startDate && r.startDate >= todayStr));
+    } else if (historyFilterTime === 'PENDIENTES') {
+      list = list.filter((r) => r.status === 'PENDIENTE');
+    }
+    if (historySearchTerm.trim()) {
+      const q = historySearchTerm.trim().toLowerCase();
+      list = list.filter(
+        (r) =>
+          (r.userName && r.userName.toLowerCase().includes(q)) ||
+          (r.leaveType && r.leaveType.toLowerCase().includes(q)) ||
+          (r.notes && r.notes.toLowerCase().includes(q)) ||
+          (r.startDate && r.startDate.includes(q)) ||
+          (r.endDate && r.endDate.includes(q))
+      );
+    }
+    return [...list].sort((a, b) => {
+      const dateA = a.startDate || a.createdAt || '';
+      const dateB = b.startDate || b.createdAt || '';
+      return dateB.localeCompare(dateA);
+    });
+  }, [
+    isAdmin,
+    timeOffRequests,
+    myRequests,
+    historyFilterEmp,
+    historyFilterStatus,
+    historyFilterTime,
+    historySearchTerm,
+    employees,
+    todayStr,
+  ]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -244,8 +328,142 @@ export const RequestsView: React.FC = () => {
         )}
       </div>
 
-      {/* Bento Grid Layout */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+      {/* Pending Requests Alert Banner (when not on history tab) */}
+      {isAdmin && pendingRequests.length > 0 && activeSubTab !== 'history' && (
+        <div className="bg-amber-50/95 border border-amber-300 rounded-2xl p-3.5 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 text-xs text-amber-950 font-bold shadow-xs">
+          <div className="flex items-center gap-2.5">
+            <span className="material-symbols-outlined text-amber-600 text-xl">notifications_active</span>
+            <span>
+              Tienes <strong>{pendingRequests.length}</strong> solicitud(es) de vacaciones o permisos pendiente(s) de aprobación.
+            </span>
+          </div>
+          <button
+            onClick={() => setActiveSubTab('history')}
+            className="bg-amber-600 hover:bg-amber-700 text-white text-xs font-black px-3.5 py-1.5 rounded-xl transition-all shadow-xs cursor-pointer shrink-0"
+          >
+            Revisar Bandeja ({pendingRequests.length})
+          </button>
+        </div>
+      )}
+
+      {/* Navigation Sub-Tabs */}
+      <div className="flex items-center justify-between gap-3 flex-wrap border-b border-slate-200/80 pb-3">
+        <div className="flex items-center gap-1.5 bg-slate-100 p-1.5 rounded-2xl border border-slate-200/80 overflow-x-auto max-w-full">
+          <button
+            onClick={() => setActiveSubTab('cuadrante')}
+            className={`px-4 py-2.5 rounded-xl text-xs font-black transition-all flex items-center gap-2 cursor-pointer shrink-0 ${
+              activeSubTab === 'cuadrante'
+                ? 'bg-white text-indigo-950 shadow-xs'
+                : 'text-slate-600 hover:text-slate-900'
+            }`}
+          >
+            <span className="material-symbols-outlined text-base text-indigo-600">calendar_month</span>
+            <span>Cuadrante Anual (Hoja Imprimible)</span>
+          </button>
+
+          <button
+            onClick={() => setActiveSubTab('auditor')}
+            className={`px-4 py-2.5 rounded-xl text-xs font-black transition-all flex items-center gap-2 cursor-pointer shrink-0 ${
+              activeSubTab === 'auditor'
+                ? 'bg-white text-indigo-950 shadow-xs'
+                : 'text-slate-600 hover:text-slate-900'
+            }`}
+          >
+            <span className="material-symbols-outlined text-base text-indigo-600">event_available</span>
+            <span>Auditor de Fines de Semana (Regla 4 FDS)</span>
+          </button>
+
+          <button
+            onClick={() => setActiveSubTab('form')}
+            className={`px-4 py-2.5 rounded-xl text-xs font-black transition-all flex items-center gap-2 cursor-pointer shrink-0 ${
+              activeSubTab === 'form'
+                ? 'bg-white text-indigo-950 shadow-xs'
+                : 'text-slate-600 hover:text-slate-900'
+            }`}
+          >
+            <span className="material-symbols-outlined text-base text-indigo-600">edit_calendar</span>
+            <span>{isAdmin ? 'Planificar / Asignar Vacaciones' : 'Solicitar Vacaciones'}</span>
+          </button>
+
+          <button
+            onClick={() => setActiveSubTab('history')}
+            className={`px-4 py-2.5 rounded-xl text-xs font-black transition-all flex items-center gap-2 cursor-pointer shrink-0 ${
+              activeSubTab === 'history'
+                ? 'bg-white text-indigo-950 shadow-xs'
+                : 'text-slate-600 hover:text-slate-900'
+            }`}
+          >
+            <span className="material-symbols-outlined text-base text-indigo-600">history_toggle_off</span>
+            <span>Historial y Modificar Vacaciones</span>
+            {pendingRequests.length > 0 && (
+              <span className="bg-amber-200 text-amber-950 border border-amber-300 px-2 py-0.5 rounded-full text-[10px] font-black">
+                {pendingRequests.length}
+              </span>
+            )}
+          </button>
+        </div>
+
+        <div className="flex items-center gap-2">
+          {activeSubTab !== 'cuadrante' && (
+            <button
+              onClick={() => setActiveSubTab('cuadrante')}
+              className="text-xs font-bold text-indigo-700 bg-indigo-50 hover:bg-indigo-100 border border-indigo-200 px-3.5 py-2 rounded-xl transition-all flex items-center gap-1.5 cursor-pointer self-start sm:self-auto"
+            >
+              <span>🖨️</span>
+              <span>Hoja Imprimible Plantilla</span>
+            </button>
+          )}
+
+          {activeSubTab !== 'auditor' && (
+            <button
+              onClick={() => setActiveSubTab('auditor')}
+              className="text-xs font-bold text-slate-700 bg-slate-100 hover:bg-slate-200 border border-slate-200 px-3.5 py-2 rounded-xl transition-all flex items-center gap-1.5 cursor-pointer self-start sm:self-auto"
+            >
+              <span>⚖️</span>
+              <span>Auditor FDS</span>
+            </button>
+          )}
+        </div>
+      </div>
+
+      {/* SUB-TAB 0: CUADRANTE ANUAL DE PLANTILLA (HOJA IMPRIMIBLE) */}
+      {activeSubTab === 'cuadrante' && (
+        <PrintableVacationStaffCalendar
+          employees={employees}
+          timeOffRequests={timeOffRequests}
+          companySettings={companySettings}
+          onSelectEmployeeToPlan={(empId) => {
+            setSelectedEmployeeId(empId);
+            setActiveSubTab('form');
+          }}
+          onOpenAuditor={(empId) => {
+            if (empId) setSelectedEmployeeId(empId);
+            setActiveSubTab('auditor');
+          }}
+          onEditRequest={(req) => setEditingRequest(req)}
+          onOpenManager={() => setActiveSubTab('history')}
+        />
+      )}
+
+      {/* SUB-TAB 1: AUDITOR VISUAL DE FINES DE SEMANA & SÁBADOS */}
+      {activeSubTab === 'auditor' && (
+        <VacationAuditorView
+          employees={employees}
+          timeOffRequests={timeOffRequests}
+          currentEmployee={currentEmp}
+          isAdmin={isAdmin}
+          onSelectEmployeeToPlan={(empId) => {
+            setSelectedEmployeeId(empId);
+            setActiveSubTab('form');
+          }}
+          onOpenStaffCalendar={() => setActiveSubTab('cuadrante')}
+        />
+      )}
+
+      {/* SUB-TAB 2: BENTO GRID LAYOUT (FORM & STATS) */}
+      {activeSubTab === 'form' && (
+        <div className="space-y-6">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
         {/* Days Available Card (Dynamic for target employee) */}
         <section className="bg-white rounded-3xl p-6 shadow-sm border border-slate-100 flex flex-col justify-between items-center text-center relative overflow-hidden">
           <div className="w-full">
@@ -483,6 +701,64 @@ export const RequestsView: React.FC = () => {
               </div>
             )}
 
+            {/* Live Weekend & Saturday Analysis Banner */}
+            {leaveType === 'Vacaciones' && livePeriodAnalysis && livePeriodAnalysis.days.length > 0 && (
+              <div className="bg-indigo-50/70 border border-indigo-200/90 rounded-2xl p-4 space-y-3">
+                <div className="flex items-center justify-between gap-2 flex-wrap">
+                  <span className="font-black text-xs text-indigo-950 flex items-center gap-1.5">
+                    <span>🔍</span>
+                    <span>Análisis de Fines de Semana en este Periodo ({targetEmp.fullName.split(' ')[0]})</span>
+                  </span>
+                  <span className="text-[10px] font-bold bg-white px-2.5 py-0.5 rounded-full border border-indigo-200 text-indigo-800">
+                    Turno: {getEffectiveSaturdayPlan(targetEmp)}
+                  </span>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                  <div className="bg-white p-2.5 rounded-xl border border-indigo-100 flex items-center justify-between">
+                    <span className="text-[11px] text-slate-600 font-medium">Fines de semana completos:</span>
+                    <span className="font-black text-xs text-purple-700">{livePeriodAnalysis.fullWeekendsCount} FDS</span>
+                  </div>
+                  <div className="bg-white p-2.5 rounded-xl border border-indigo-100 flex items-center justify-between">
+                    <span className="text-[11px] text-slate-600 font-medium">Sábados laborables (de turno):</span>
+                    <span className="font-black text-xs text-amber-700">{livePeriodAnalysis.workingSaturdaysCount}</span>
+                  </div>
+                  <div className="bg-white p-2.5 rounded-xl border border-indigo-100 flex items-center justify-between">
+                    <span className="text-[11px] text-slate-600 font-medium">Sábados libres (descanso):</span>
+                    <span className="font-black text-xs text-emerald-700">{livePeriodAnalysis.offSaturdaysCount}</span>
+                  </div>
+                </div>
+
+                {/* Day-by-day mini strip */}
+                <div className="flex gap-1.5 overflow-x-auto pb-1 pt-1 scrollbar-thin">
+                  {livePeriodAnalysis.days.map((d) => (
+                    <div
+                      key={d.dateStr}
+                      className={`shrink-0 rounded-xl px-2.5 py-1.5 text-center border text-[10px] min-w-[50px] ${
+                        d.isSaturday
+                          ? d.saturdayType === 'LABORABLE'
+                            ? 'bg-amber-100 border-amber-300 text-amber-950 font-black'
+                            : 'bg-emerald-100 border-emerald-300 text-emerald-950 font-black'
+                          : d.isSunday
+                          ? 'bg-purple-100 border-purple-200 text-purple-950 font-black'
+                          : 'bg-white border-slate-200 text-slate-700'
+                      }`}
+                    >
+                      <div className="text-[9px] font-bold uppercase text-slate-400">{d.dayOfWeekShort}</div>
+                      <div className="font-black text-sm my-0.5">{d.dayNumber}</div>
+                      {d.isSaturday && (
+                        <div className="text-[8px] mt-0.5 font-bold whitespace-nowrap">
+                          {d.saturdayType === 'LABORABLE' ? '💼 Lab.' : '🏖️ Libre'}
+                        </div>
+                      )}
+                      {d.isSunday && <div className="text-[8px] mt-0.5 font-bold text-purple-800">Dom.</div>}
+                      {!d.isWeekend && <div className="text-[8px] mt-0.5 text-slate-400">L-V</div>}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
             {/* Admin Planning Mode: Immediate Approval vs Pending */}
             {isAdmin && (
               <div>
@@ -618,6 +894,28 @@ export const RequestsView: React.FC = () => {
         </section>
       </div>
 
+      {/* Quick shortcut to auditor */}
+      <div className="bg-slate-50 border border-slate-200/80 rounded-3xl p-5 flex flex-col sm:flex-row items-center justify-between gap-3">
+        <div className="flex items-center gap-3">
+          <span className="text-2xl">⚖️</span>
+          <div>
+            <h4 className="font-black text-sm text-slate-900">¿Quieres verificar el cómputo de sábados y fines de semana?</h4>
+            <p className="text-xs text-slate-500">Accede al auditor para comprobar si cumple los 4 fines de semana (2 sábados laborables + 2 libres).</p>
+          </div>
+        </div>
+        <button
+          onClick={() => setActiveSubTab('auditor')}
+          className="bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-black px-4 py-2.5 rounded-xl transition-all shadow-xs cursor-pointer shrink-0"
+        >
+          Abrir Auditor Visual 📊
+        </button>
+      </div>
+      </div>
+      )}
+
+      {/* SUB-TAB 3: HISTORIAL Y BANDEJA DE APROBACIONES */}
+      {activeSubTab === 'history' && (
+      <div className="space-y-6">
       {/* Admin Review List Section (if Manager/Admin with pending requests) */}
       {isAdmin && pendingRequests.length > 0 && (
         <section className="bg-white rounded-3xl p-6 sm:p-8 shadow-sm border border-slate-100">
@@ -694,97 +992,256 @@ export const RequestsView: React.FC = () => {
         </section>
       )}
 
-      {/* General History List & Filtering */}
+      {/* General History List & Filtering with CRUD Management */}
       <section className="bg-white rounded-3xl p-6 sm:p-8 shadow-sm border border-slate-100">
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between border-b border-slate-100 pb-4 mb-4 gap-3">
-          <div>
-            <h2 className="font-bold text-lg text-slate-900">
-              {isAdmin ? 'Historial General de Solicitudes y Vacaciones' : 'Historial de mis Solicitudes'}
-            </h2>
-            <p className="text-xs text-slate-400">
-              {isAdmin
-                ? 'Registro de todas las vacaciones disfrutadas, planificadas o pendientes en el sistema.'
-                : 'Tus ausencias y vacaciones registradas en el año en curso.'}
-            </p>
+        {/* Header & KPI Summary */}
+        <div className="border-b border-slate-100 pb-5 mb-5 space-y-4">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+            <div>
+              <div className="flex items-center gap-2">
+                <span className="material-symbols-outlined text-indigo-600 text-xl">event_repeat</span>
+                <h2 className="font-bold text-lg text-slate-900">
+                  {isAdmin ? 'Gestor de Vacaciones y Permisos (Modificar / Borrar)' : 'Mis Vacaciones y Ausencias'}
+                </h2>
+              </div>
+              <p className="text-xs text-slate-500 mt-1">
+                {isAdmin
+                  ? 'Consulta, modifica fechas o computo de días y elimina cualquier registro de vacaciones tanto pasadas (disfrutadas) como futuras.'
+                  : 'Consulta el estado de tus vacaciones, edita fechas o cancela solicitudes pendientes.'}
+              </p>
+            </div>
+
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => setActiveSubTab('form')}
+                className="bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs px-3.5 py-2 rounded-xl transition-colors cursor-pointer flex items-center gap-1.5 shadow-xs"
+              >
+                <span className="material-symbols-outlined text-sm">add_circle</span>
+                <span>+ Planificar Vacaciones</span>
+              </button>
+            </div>
           </div>
 
-          <div className="flex items-center gap-2 flex-wrap">
-            {isAdmin && (
+          {/* KPI Summary counters */}
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 pt-2">
+            <div
+              onClick={() => setHistoryFilterTime('TODOS')}
+              className={`p-3 rounded-2xl border transition-all cursor-pointer ${
+                historyFilterTime === 'TODOS'
+                  ? 'bg-indigo-50/80 border-indigo-200 ring-2 ring-indigo-500/20'
+                  : 'bg-slate-50 border-slate-100 hover:bg-slate-100/70'
+              }`}
+            >
+              <div className="flex items-center justify-between text-xs text-slate-500 font-bold mb-1">
+                <span>Total Registros</span>
+                <span className="text-indigo-600">📋</span>
+              </div>
+              <span className="text-xl font-black text-slate-800">
+                {isAdmin ? timeOffRequests.length : myRequests.length}
+              </span>
+            </div>
+
+            <div
+              onClick={() => setHistoryFilterTime('PASADAS')}
+              className={`p-3 rounded-2xl border transition-all cursor-pointer ${
+                historyFilterTime === 'PASADAS'
+                  ? 'bg-slate-200/80 border-slate-300 ring-2 ring-slate-500/20'
+                  : 'bg-slate-50 border-slate-100 hover:bg-slate-100/70'
+              }`}
+            >
+              <div className="flex items-center justify-between text-xs text-slate-500 font-bold mb-1">
+                <span>🕒 Pasadas (Disfrutadas)</span>
+                <span className="text-slate-600">✓</span>
+              </div>
+              <span className="text-xl font-black text-slate-700">{pastRequestsCount}</span>
+            </div>
+
+            <div
+              onClick={() => setHistoryFilterTime('FUTURAS')}
+              className={`p-3 rounded-2xl border transition-all cursor-pointer ${
+                historyFilterTime === 'FUTURAS'
+                  ? 'bg-blue-50/80 border-blue-200 ring-2 ring-blue-500/20'
+                  : 'bg-slate-50 border-slate-100 hover:bg-slate-100/70'
+              }`}
+            >
+              <div className="flex items-center justify-between text-xs text-blue-600 font-bold mb-1">
+                <span>📅 Futuras (Previstas)</span>
+                <span className="text-blue-600">🏖️</span>
+              </div>
+              <span className="text-xl font-black text-blue-700">{futureRequestsCount}</span>
+            </div>
+
+            <div
+              onClick={() => setHistoryFilterTime('PENDIENTES')}
+              className={`p-3 rounded-2xl border transition-all cursor-pointer ${
+                historyFilterTime === 'PENDIENTES'
+                  ? 'bg-amber-50/80 border-amber-200 ring-2 ring-amber-500/20'
+                  : 'bg-slate-50 border-slate-100 hover:bg-slate-100/70'
+              }`}
+            >
+              <div className="flex items-center justify-between text-xs text-amber-700 font-bold mb-1">
+                <span>⏳ Pendientes Visto Bueno</span>
+                <span className="text-amber-600">⚠️</span>
+              </div>
+              <span className="text-xl font-black text-amber-800">{pendingRequests.length}</span>
+            </div>
+          </div>
+
+          {/* Filtering Controls Bar */}
+          <div className="flex flex-col md:flex-row items-stretch md:items-center justify-between gap-3 pt-2">
+            <div className="relative flex-1">
+              <span className="absolute left-3 top-2.5 text-slate-400 material-symbols-outlined text-sm">
+                search
+              </span>
+              <input
+                type="text"
+                value={historySearchTerm}
+                onChange={(e) => setHistorySearchTerm(e.target.value)}
+                placeholder="Buscar por empleado, motivo, notas o fechas (ej: 2026-08)..."
+                className="w-full bg-slate-50 border border-slate-200 text-xs rounded-xl pl-9 pr-8 py-2 text-slate-700 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+              />
+              {historySearchTerm && (
+                <button
+                  onClick={() => setHistorySearchTerm('')}
+                  className="absolute right-2.5 top-2 text-slate-400 hover:text-slate-600 text-xs cursor-pointer"
+                >
+                  ✕
+                </button>
+              )}
+            </div>
+
+            <div className="flex items-center gap-2 flex-wrap">
+              {isAdmin && (
+                <select
+                  value={historyFilterEmp}
+                  onChange={(e) => setHistoryFilterEmp(e.target.value)}
+                  className="bg-slate-50 border border-slate-200 text-xs font-bold rounded-xl px-3 py-2 text-slate-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 cursor-pointer"
+                >
+                  <option value="TODOS">Todos los Empleados ({employees.length})</option>
+                  {employees.map((e) => (
+                    <option key={e.id} value={e.id}>
+                      {e.fullName}
+                    </option>
+                  ))}
+                </select>
+              )}
+
               <select
-                value={historyFilterEmp}
-                onChange={(e) => setHistoryFilterEmp(e.target.value)}
+                value={historyFilterStatus}
+                onChange={(e) => setHistoryFilterStatus(e.target.value)}
                 className="bg-slate-50 border border-slate-200 text-xs font-bold rounded-xl px-3 py-2 text-slate-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 cursor-pointer"
               >
-                <option value="TODOS">Todos los Empleados ({timeOffRequests.length})</option>
-                {employees.map((e) => (
-                  <option key={e.id} value={e.id}>
-                    {e.fullName}
-                  </option>
-                ))}
+                <option value="TODOS">Todos los Estados</option>
+                <option value="APROBADO">Solo Aprobadas</option>
+                <option value="PENDIENTE">Solo Pendientes</option>
+                <option value="RECHAZADO">Solo Rechazadas</option>
               </select>
-            )}
 
-            <select
-              value={historyFilterStatus}
-              onChange={(e) => setHistoryFilterStatus(e.target.value)}
-              className="bg-slate-50 border border-slate-200 text-xs font-bold rounded-xl px-3 py-2 text-slate-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 cursor-pointer"
-            >
-              <option value="TODOS">Todos los Estados</option>
-              <option value="APROBADO">Solo Aprobadas</option>
-              <option value="PENDIENTE">Solo Pendientes</option>
-              <option value="RECHAZADO">Solo Rechazadas</option>
-            </select>
+              {(historyFilterEmp !== 'TODOS' ||
+                historyFilterStatus !== 'TODOS' ||
+                historyFilterTime !== 'TODOS' ||
+                historySearchTerm) && (
+                <button
+                  onClick={() => {
+                    setHistoryFilterEmp('TODOS');
+                    setHistoryFilterStatus('TODOS');
+                    setHistoryFilterTime('TODOS');
+                    setHistorySearchTerm('');
+                  }}
+                  className="text-xs text-indigo-600 hover:text-indigo-800 font-bold px-2 py-1 cursor-pointer"
+                >
+                  Restablecer
+                </button>
+              )}
+            </div>
           </div>
         </div>
 
         {displayedHistory.length === 0 ? (
           <div className="py-12 px-4 text-center rounded-2xl bg-slate-50 border border-dashed border-slate-200">
             <span className="text-3xl block mb-2">📋</span>
-            <p className="font-bold text-sm text-slate-700">Sin solicitudes o vacaciones registradas</p>
+            <p className="font-bold text-sm text-slate-700">Sin resultados con los filtros actuales</p>
             <p className="text-xs text-slate-400 mt-1 max-w-sm mx-auto">
-              {isAdmin
-                ? 'Utiliza el formulario superior para planificar vacaciones o registrar periodos ya disfrutados de cualquier empleado.'
-                : 'Utiliza el formulario superior para registrar tus vacaciones o ausencias.'}
+              No hay vacaciones o solicitudes que coincidan con la búsqueda. Puedes cambiar los filtros o registrar un nuevo periodo.
             </p>
+            <button
+              onClick={() => {
+                setHistoryFilterEmp('TODOS');
+                setHistoryFilterStatus('TODOS');
+                setHistoryFilterTime('TODOS');
+                setHistorySearchTerm('');
+              }}
+              className="mt-3 text-xs text-indigo-600 font-bold hover:underline cursor-pointer"
+            >
+              Ver todas las vacaciones
+            </button>
           </div>
         ) : (
           <div className="space-y-3">
             {displayedHistory.map((req) => {
-              const isPast = req.endDate < todayStr;
+              const isPast = req.endDate ? req.endDate < todayStr : false;
+              const isFuture = req.startDate ? req.startDate > todayStr : false;
+              const isOngoing = !isPast && !isFuture;
+              const leaveName = req.leaveType || 'Vacaciones';
+              const employeeName = req.userName || 'Empleado';
+              const days = req.daysCount ?? 1;
+
               return (
                 <div
                   key={req.id}
-                  className="p-4 rounded-2xl border border-slate-100 bg-slate-50/70 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 hover:bg-slate-50 transition-colors"
+                  className={`p-4 rounded-2xl border transition-all flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 ${
+                    isPast
+                      ? 'bg-slate-50/70 border-slate-200/80 hover:bg-slate-50'
+                      : isFuture
+                      ? 'bg-blue-50/30 border-blue-100 hover:bg-blue-50/50'
+                      : 'bg-emerald-50/40 border-emerald-200'
+                  }`}
                 >
                   <div className="space-y-1">
                     <div className="flex items-center gap-2 flex-wrap">
                       <p className="font-bold text-sm text-slate-800">
-                        {req.leaveType} {isAdmin ? `— ${req.userName}` : ''}
+                        {leaveName} {isAdmin ? `— ${employeeName}` : ''}
                       </p>
+
                       <span className="bg-white px-2 py-0.5 rounded-md border border-slate-200 text-[10px] font-bold text-slate-600 font-mono">
-                        {req.daysCount} {req.daysCount === 1 ? 'día' : 'días'}
+                        {days} {days === 1 ? 'día' : 'días'}
                       </span>
-                      {isPast && (
-                        <span className="bg-amber-50 text-amber-800 border border-amber-200 px-2 py-0.5 rounded-md text-[10px] font-semibold flex items-center gap-1">
-                          <span>🕒 Fecha pasada / Disfrutada</span>
+
+                      {/* Temporal label badge */}
+                      {isPast ? (
+                        <span className="bg-slate-100 text-slate-700 border border-slate-300/70 px-2 py-0.5 rounded-md text-[10px] font-bold flex items-center gap-1">
+                          <span>🕒 Disfrutada (Pasada)</span>
+                        </span>
+                      ) : isFuture ? (
+                        <span className="bg-blue-100 text-blue-800 border border-blue-200 px-2 py-0.5 rounded-md text-[10px] font-bold flex items-center gap-1">
+                          <span>📅 Prevista (Futura)</span>
+                        </span>
+                      ) : (
+                        <span className="bg-emerald-100 text-emerald-800 border border-emerald-300 px-2 py-0.5 rounded-md text-[10px] font-bold flex items-center gap-1 animate-pulse">
+                          <span>⚡ En curso hoy</span>
                         </span>
                       )}
                     </div>
-                    <p className="text-xs text-slate-500 font-medium">
-                      📅 Del <span className="font-semibold text-slate-700">{req.startDate}</span> al{' '}
-                      <span className="font-semibold text-slate-700">{req.endDate}</span>
-                      {req.createdAt && (
-                        <span className="text-slate-400 text-[11px]"> • Registrada: {req.createdAt}</span>
-                      )}
-                    </p>
+
+                    {req.startDate && req.endDate && (
+                      <p className="text-xs text-slate-600 font-medium">
+                        📅 Del <span className="font-bold text-slate-800">{req.startDate}</span> al{' '}
+                        <span className="font-bold text-slate-800">{req.endDate}</span>
+                        {req.createdAt && (
+                          <span className="text-slate-400 text-[11px]"> • Creada: {req.createdAt}</span>
+                        )}
+                      </p>
+                    )}
+
                     {req.notes && (
-                      <p className="text-xs text-slate-600 italic bg-white/80 px-2.5 py-1 rounded-lg border border-slate-100 max-w-xl">
+                      <p className="text-xs text-slate-600 italic bg-white/90 px-2.5 py-1 rounded-lg border border-slate-200/80 max-w-xl">
                         💬 "{req.notes}"
                       </p>
                     )}
+
                     {req.reviewedBy && (
                       <p className="text-[11px] text-slate-400">
-                        Planificado / Aprobado por:{' '}
+                        Aprobado / Planificado por:{' '}
                         <span className="font-semibold text-slate-600">{req.reviewedBy}</span>
                       </p>
                     )}
@@ -794,30 +1251,41 @@ export const RequestsView: React.FC = () => {
                     <span
                       className={`px-3 py-1 rounded-full font-bold text-[11px] uppercase tracking-wide ${
                         req.status === 'APROBADO'
-                          ? 'bg-emerald-100 text-emerald-800'
+                          ? 'bg-emerald-100 text-emerald-800 border border-emerald-200'
                           : req.status === 'PENDIENTE'
-                          ? 'bg-amber-100 text-amber-800'
-                          : 'bg-rose-100 text-rose-800'
+                          ? 'bg-amber-100 text-amber-800 border border-amber-200'
+                          : 'bg-rose-100 text-rose-800 border border-rose-200'
                       }`}
                     >
                       {req.status}
                     </span>
 
+                    {/* Prominent Edit Button */}
+                    <button
+                      onClick={() => setEditingRequest(req)}
+                      className="inline-flex items-center gap-1 px-3 py-1.5 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200 rounded-xl text-xs font-bold transition-all cursor-pointer shadow-2xs"
+                      title="Modificar fechas, días o asignación de este registro"
+                    >
+                      <span className="material-symbols-outlined text-sm">edit</span>
+                      <span>Modificar</span>
+                    </button>
+
+                    {/* Prominent Delete Button */}
                     {(isAdmin || req.status === 'PENDIENTE') && (
                       <button
                         onClick={() => {
                           if (
                             window.confirm(
-                              `¿Deseas eliminar este registro de vacaciones de ${req.userName} (${req.daysCount} días)?`
+                              `¿Confirmas que deseas eliminar definitivamente este registro de vacaciones de ${employeeName} (${days} días del ${req.startDate} al ${req.endDate})? Esta acción liberará los días en el saldo del empleado.`
                             )
                           ) {
                             deleteTimeOffRequest(req.id);
                           }
                         }}
-                        title="Eliminar registro"
-                        className="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-colors cursor-pointer text-xs"
+                        title="Eliminar este periodo definitivamente"
+                        className="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 border border-transparent hover:border-rose-200 rounded-xl transition-colors cursor-pointer text-xs"
                       >
-                        🗑️
+                        <span className="material-symbols-outlined text-base">delete</span>
                       </button>
                     )}
                   </div>
@@ -827,6 +1295,27 @@ export const RequestsView: React.FC = () => {
           </div>
         )}
       </section>
+      </div>
+      )}
+
+      {/* MODAL FOR EDITING / DELETING VACATION RECORDS */}
+      {editingRequest && (
+        <EditVacationModal
+          request={editingRequest}
+          employees={employees}
+          isAdmin={isAdmin}
+          isOpen={Boolean(editingRequest)}
+          onClose={() => setEditingRequest(null)}
+          onSave={async (requestId, updates) => {
+            await updateTimeOffRequest(requestId, updates);
+            setEditingRequest(null);
+          }}
+          onDelete={async (requestId) => {
+            await deleteTimeOffRequest(requestId);
+            setEditingRequest(null);
+          }}
+        />
+      )}
     </div>
   );
 };
