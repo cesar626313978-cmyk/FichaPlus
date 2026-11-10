@@ -75,11 +75,26 @@ export interface EmployeeRecord {
   vacationNotes?: string; // Motivo o desglose de días adicionales (ej. '+2 días por antigüedad/convenio')
   // Individual reminder preferences for this employee
   reminders?: EmployeeReminders;
-  joinedDate: string;
+  joinedDate: string; // Fecha de antigüedad / alta en empresa (YYYY-MM-DD)
   endDate?: string; // Fecha de baja para extrabajadores (custodia 4 años)
   pinCode?: string;
   invitationSentAt?: string;
   invitationMethod?: 'email' | 'whatsapp' | 'manual';
+  // Official Payroll & Social Security Data (Datos Oficiales de Nómina / TGSS)
+  socialSecurityNumber?: string; // Nº Afiliación S.S. (NAF), ej. 03/10184672-12
+  professionalCategory?: string; // Categoría profesional en nómina, ej. VETERINARI, ENCARGADO, DEPENDIENT, AUX LIMPIE
+  tariffGroup?: string; // Grupo de Cotización / Tarifa S.S., ej. 1, 8, 10
+  contractCode?: string; // Código de Contrato (COD.CT), ej. 189, 100
+  payrollNumber?: string; // NRO. Matrícula / Orden en nómina, ej. 14, 19, 21, 31, 34, 40, 43
+  address?: string; // Domicilio fiscal / particular completo del trabajador
+  baseSalary?: number; // Salario Base mensual (€)
+  proratedBonus?: number; // Paga Extra Prorrateada mensual (€)
+  jobAllowance?: number; // Plus Puesto de Trabajo mensual (€)
+  transportAllowance?: number; // Plus Transporte mensual (€)
+  grossMonthlySalary?: number; // Remuneración Total / Total Devengado Bruto (€)
+  ssContributionBase?: number; // Base Cotización Contingencias Comunes S.S. (€)
+  irpfPercentage?: number; // Porcentaje Retención I.R.P.F. (%)
+  netMonthlySalary?: number; // Líquido a Percibir / Salario Neto Mensual (€)
 }
 
 export interface UserProfile {

@@ -86,6 +86,18 @@ export const EmployeesView: React.FC = () => {
   const [saturdayShiftWeekB, setSaturdayShiftWeekB] = useState<string>('Continua (09:00 - 14:00)');
   const [pinCode, setPinCode] = useState('1234');
 
+  // Official Payroll & Social Security Form Fields
+  const [joinedDate, setJoinedDate] = useState<string>(new Date().toISOString().slice(0, 10));
+  const [socialSecurityNumber, setSocialSecurityNumber] = useState<string>('');
+  const [professionalCategory, setProfessionalCategory] = useState<string>('');
+  const [tariffGroup, setTariffGroup] = useState<string>('1');
+  const [contractCode, setContractCode] = useState<string>('189');
+  const [payrollNumber, setPayrollNumber] = useState<string>('');
+  const [address, setAddress] = useState<string>('');
+  const [grossMonthlySalary, setGrossMonthlySalary] = useState<number | ''>('');
+  const [netMonthlySalary, setNetMonthlySalary] = useState<number | ''>('');
+  const [irpfPercentage, setIrpfPercentage] = useState<number | ''>('');
+
   // Work modalities allowed for clocking in: 'presencial' (Oficina), 'teletrabajo' (Casa), 'cliente' (Ruta)
   const [allowedWorkLocations, setAllowedWorkLocations] = useState<AllowedWorkLocation[]>([
     'presencial',
@@ -259,6 +271,16 @@ export const EmployeesView: React.FC = () => {
     setSaturdayShiftWeekB('Continua (09:00 - 14:00)');
     setPinCode(String(Math.floor(1000 + Math.random() * 9000)));
     setAllowedWorkLocations(['presencial', 'teletrabajo', 'cliente']);
+    setJoinedDate(new Date().toISOString().slice(0, 10));
+    setSocialSecurityNumber('');
+    setProfessionalCategory('');
+    setTariffGroup('1');
+    setContractCode('189');
+    setPayrollNumber('');
+    setAddress('');
+    setGrossMonthlySalary('');
+    setNetMonthlySalary('');
+    setIrpfPercentage('');
     setIsFormOpen(true);
   };
 
@@ -295,6 +317,17 @@ export const EmployeesView: React.FC = () => {
     setVacationDays(emp.vacationDays ?? 30);
     setVacationDaysType(emp.vacationDaysType ?? 'NATURALES');
     setVacationNotes(emp.vacationNotes ?? '');
+    // Load official payroll & SS fields
+    setJoinedDate(emp.joinedDate || '2024-01-01');
+    setSocialSecurityNumber(emp.socialSecurityNumber || '');
+    setProfessionalCategory(emp.professionalCategory || '');
+    setTariffGroup(emp.tariffGroup || '1');
+    setContractCode(emp.contractCode || '189');
+    setPayrollNumber(emp.payrollNumber || '');
+    setAddress(emp.address || '');
+    setGrossMonthlySalary(emp.grossMonthlySalary ?? '');
+    setNetMonthlySalary(emp.netMonthlySalary ?? '');
+    setIrpfPercentage(emp.irpfPercentage ?? '');
     setIsFormOpen(true);
   };
 
@@ -347,6 +380,16 @@ export const EmployeesView: React.FC = () => {
             vacationDays: cleanVacDays,
             vacationDaysType,
             vacationNotes: vacationNotes.trim(),
+            joinedDate: joinedDate || existingPerson.joinedDate,
+            socialSecurityNumber: socialSecurityNumber.trim() || existingPerson.socialSecurityNumber,
+            professionalCategory: professionalCategory.trim() || existingPerson.professionalCategory,
+            tariffGroup: tariffGroup.trim() || existingPerson.tariffGroup,
+            contractCode: contractCode.trim() || existingPerson.contractCode,
+            payrollNumber: payrollNumber.trim() || existingPerson.payrollNumber,
+            address: address.trim() || existingPerson.address,
+            grossMonthlySalary: grossMonthlySalary !== '' ? Number(grossMonthlySalary) : existingPerson.grossMonthlySalary,
+            netMonthlySalary: netMonthlySalary !== '' ? Number(netMonthlySalary) : existingPerson.netMonthlySalary,
+            irpfPercentage: irpfPercentage !== '' ? Number(irpfPercentage) : existingPerson.irpfPercentage,
           });
           setSuccessToast(`✓ ¡Ficha de "${cleanFullName}" actualizada correctamente (se fusionó para evitar duplicados)!`);
           setIsFormOpen(false);
@@ -434,6 +477,16 @@ export const EmployeesView: React.FC = () => {
           vacationDays: cleanVacDays,
           vacationDaysType,
           vacationNotes: vacationNotes.trim(),
+          joinedDate: joinedDate || new Date().toISOString().slice(0, 10),
+          socialSecurityNumber: socialSecurityNumber.trim() || undefined,
+          professionalCategory: professionalCategory.trim() || undefined,
+          tariffGroup: tariffGroup.trim() || undefined,
+          contractCode: contractCode.trim() || undefined,
+          payrollNumber: payrollNumber.trim() || undefined,
+          address: address.trim() || undefined,
+          grossMonthlySalary: grossMonthlySalary !== '' ? Number(grossMonthlySalary) : undefined,
+          netMonthlySalary: netMonthlySalary !== '' ? Number(netMonthlySalary) : undefined,
+          irpfPercentage: irpfPercentage !== '' ? Number(irpfPercentage) : undefined,
         });
         setSuccessToast(`✓ ¡Empleado "${cleanFullName}" actualizado con éxito!`);
       } else {
@@ -460,11 +513,20 @@ export const EmployeesView: React.FC = () => {
           saturdayShift,
           saturdayShiftWeekB,
           allowedWorkLocations: allowedWorkLocations.length > 0 ? allowedWorkLocations : ['presencial'],
-          joinedDate: new Date().toISOString().slice(0, 10),
+          joinedDate: joinedDate || new Date().toISOString().slice(0, 10),
           pinCode,
           vacationDays: cleanVacDays,
           vacationDaysType,
           vacationNotes: vacationNotes.trim(),
+          socialSecurityNumber: socialSecurityNumber.trim() || undefined,
+          professionalCategory: professionalCategory.trim() || undefined,
+          tariffGroup: tariffGroup.trim() || undefined,
+          contractCode: contractCode.trim() || undefined,
+          payrollNumber: payrollNumber.trim() || undefined,
+          address: address.trim() || undefined,
+          grossMonthlySalary: grossMonthlySalary !== '' ? Number(grossMonthlySalary) : undefined,
+          netMonthlySalary: netMonthlySalary !== '' ? Number(netMonthlySalary) : undefined,
+          irpfPercentage: irpfPercentage !== '' ? Number(irpfPercentage) : undefined,
         };
         const createdRecord = await addEmployee(newEmp);
         setSuccessToast(`✓ ¡"${cleanFullName}" añadido y guardado con éxito!`);
@@ -484,11 +546,15 @@ export const EmployeesView: React.FC = () => {
   };
 
   const filteredEmployees = sanitizedEmployees.filter((emp) => {
+    const q = searchTerm.toLowerCase();
     const matchesSearch =
-      emp.fullName.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      emp.dni.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      emp.employeeNumber.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      emp.email.toLowerCase().includes(searchTerm.toLowerCase());
+      emp.fullName.toLowerCase().includes(q) ||
+      emp.dni.toLowerCase().includes(q) ||
+      emp.employeeNumber.toLowerCase().includes(q) ||
+      emp.email.toLowerCase().includes(q) ||
+      (emp.socialSecurityNumber || '').toLowerCase().includes(q) ||
+      (emp.professionalCategory || '').toLowerCase().includes(q) ||
+      (emp.address || '').toLowerCase().includes(q);
     const matchesStatus = statusFilter === 'ALL' || emp.status === statusFilter;
     const matchesDept = departmentFilter === 'ALL' || emp.department === departmentFilter;
     const satPlan = getEffectiveSaturdayPlan(emp);
@@ -940,8 +1006,40 @@ export const EmployeesView: React.FC = () => {
                 <span className="font-mono font-bold text-slate-800">{emp.dni}</span>
               </div>
               <div>
+                <span className="font-bold text-[10px] uppercase text-slate-400 block">Nº Afiliación S.S.</span>
+                <span className="font-mono font-bold text-indigo-800">
+                  {emp.socialSecurityNumber || 'Pendiente'}
+                </span>
+              </div>
+              <div>
+                <span className="font-bold text-[10px] uppercase text-slate-400 block">Antigüedad / Alta</span>
+                <span className="font-mono font-bold text-slate-800">
+                  {emp.joinedDate
+                    ? new Date(emp.joinedDate + 'T00:00:00').toLocaleDateString('es-ES', {
+                        day: '2-digit',
+                        month: 'short',
+                        year: 'numeric',
+                      })
+                    : '—'}
+                </span>
+              </div>
+              <div>
+                <span className="font-bold text-[10px] uppercase text-slate-400 block">Categoría y Contrato</span>
+                <span className="font-bold text-slate-800 block">
+                  {emp.professionalCategory || emp.jobTitle}
+                </span>
+                <span className="text-[10px] text-slate-500 font-semibold">
+                  {emp.contractCode ? `Cód. CT ${emp.contractCode}` : emp.contractType}
+                  {emp.tariffGroup ? ` • Tarifa G.${emp.tariffGroup}` : ''}
+                  {emp.payrollNumber ? ` • Matr. #${emp.payrollNumber}` : ''}
+                </span>
+              </div>
+              <div>
                 <span className="font-bold text-[10px] uppercase text-slate-400 block">Jornada</span>
                 <span className="font-bold text-slate-800">{emp.weeklyHours}h / semana</span>
+                <span className="text-[10px] text-emerald-700 font-semibold block">
+                  {emp.weeklyHours >= 40 ? 'Tiempo Completo' : 'Tiempo Parcial'}
+                </span>
               </div>
               <div>
                 <span className="font-bold text-[10px] uppercase text-slate-400 block">Horario Asignado</span>
@@ -990,6 +1088,50 @@ export const EmployeesView: React.FC = () => {
                   );
                 })()}
               </div>
+
+              {/* Official Address & Payroll Summary Row */}
+              {(emp.address || emp.grossMonthlySalary) && (
+                <div className="col-span-2 sm:col-span-3 bg-white border border-slate-200/90 rounded-xl p-2.5 flex flex-col gap-1.5 shadow-2xs">
+                  {emp.address && (
+                    <div className="flex items-start gap-1.5 text-[11px] text-slate-700">
+                      <span className="material-symbols-outlined text-sm text-indigo-600 shrink-0 mt-0.5">
+                        home_pin
+                      </span>
+                      <div>
+                        <span className="font-bold text-[10px] uppercase text-slate-400 mr-1.5">
+                          Domicilio:
+                        </span>
+                        <span className="font-semibold text-slate-800">{emp.address}</span>
+                      </div>
+                    </div>
+                  )}
+                  {emp.grossMonthlySalary && (
+                    <div className="flex flex-wrap items-center justify-between gap-2 pt-1.5 border-t border-slate-100 text-[11px]">
+                      <div className="flex items-center gap-1.5 flex-wrap">
+                        <span className="material-symbols-outlined text-sm text-emerald-600">
+                          payments
+                        </span>
+                        <span className="font-bold text-[10px] uppercase text-slate-400">
+                          Nómina Oficial:
+                        </span>
+                        <span className="bg-slate-100 text-slate-800 font-mono font-bold px-2 py-0.5 rounded-md">
+                          Bruto: {emp.grossMonthlySalary.toLocaleString('es-ES', { minimumFractionDigits: 2 })} €
+                        </span>
+                        {emp.irpfPercentage !== undefined && (
+                          <span className="bg-amber-50 text-amber-900 border border-amber-200 font-mono font-bold px-2 py-0.5 rounded-md">
+                            IRPF: {emp.irpfPercentage.toLocaleString('es-ES', { minimumFractionDigits: 2 })}%
+                          </span>
+                        )}
+                      </div>
+                      {emp.netMonthlySalary !== undefined && (
+                        <span className="bg-emerald-50 text-emerald-800 border border-emerald-200 font-mono font-black px-2.5 py-0.5 rounded-md">
+                          Líquido: {emp.netMonthlySalary.toLocaleString('es-ES', { minimumFractionDigits: 2 })} €
+                        </span>
+                      )}
+                    </div>
+                  )}
+                </div>
+              )}
 
               {/* Work Locations Allowed Badge */}
               <div className="col-span-2 sm:col-span-3 bg-indigo-50/60 border border-indigo-100/90 rounded-xl px-3 py-1.5 flex items-center justify-between gap-2 flex-wrap text-xs">
@@ -1141,16 +1283,24 @@ export const EmployeesView: React.FC = () => {
               </div>
 
               <div className="col-span-2 sm:col-span-3 border-t border-slate-200/60 pt-2 flex flex-wrap justify-between items-center gap-2 text-[11px] text-slate-500">
-                <span className="flex items-center gap-1">
-                  <span className="material-symbols-outlined text-sm text-slate-400">mail</span>
+                <span className="flex items-center gap-1 font-medium text-slate-700">
+                  <span className="material-symbols-outlined text-sm text-indigo-500">mail</span>
                   {emp.email}
                 </span>
-                {emp.phone && (
-                  <span className="flex items-center gap-1 font-medium text-slate-700">
-                    <span className="material-symbols-outlined text-sm text-emerald-500">call</span>
-                    {emp.phone}
-                  </span>
-                )}
+                <div className="flex items-center gap-2 flex-wrap">
+                  {emp.phone && (
+                    <span className="flex items-center gap-1 font-bold text-slate-700 bg-emerald-50 border border-emerald-200/80 px-2 py-0.5 rounded-md">
+                      <span className="material-symbols-outlined text-xs text-emerald-600">call</span>
+                      {emp.phone}
+                    </span>
+                  )}
+                  {emp.pinCode && (
+                    <span className="flex items-center gap-1 font-mono font-bold text-pink-800 bg-pink-50 border border-pink-200 px-2 py-0.5 rounded-md" title="PIN de acceso de 4 dígitos">
+                      <span className="material-symbols-outlined text-xs text-pink-600">pin</span>
+                      PIN: {emp.pinCode}
+                    </span>
+                  )}
+                </div>
               </div>
             </div>
 
@@ -1476,7 +1626,7 @@ export const EmployeesView: React.FC = () => {
                     type="text"
                     value={department}
                     onChange={(e) => setDepartment(e.target.value)}
-                    placeholder="Desarrollo, Ventas..."
+                    placeholder="Clínica Veterinaria, Tienda..."
                     className="w-full bg-slate-50 border border-slate-300 p-2.5 rounded-xl text-xs font-bold focus:outline-none focus:ring-2 focus:ring-indigo-500"
                   />
                 </div>
@@ -1488,9 +1638,164 @@ export const EmployeesView: React.FC = () => {
                     type="text"
                     value={jobTitle}
                     onChange={(e) => setJobTitle(e.target.value)}
-                    placeholder="Senior Developer..."
+                    placeholder="Veterinaria, Dependiente, Encargado..."
                     className="w-full bg-slate-50 border border-slate-300 p-2.5 rounded-xl text-xs font-bold focus:outline-none focus:ring-2 focus:ring-indigo-500"
                   />
+                </div>
+              </div>
+
+              {/* DATOS OFICIALES DE NÓMINA Y SEGURIDAD SOCIAL */}
+              <div className="mt-2 bg-slate-50/90 p-4 rounded-2xl border border-slate-200 space-y-3">
+                <div className="flex items-center justify-between border-b border-slate-200 pb-2">
+                  <div className="flex items-center gap-1.5 text-indigo-950">
+                    <span className="material-symbols-outlined text-lg text-indigo-600">
+                      assignment_ind
+                    </span>
+                    <h3 className="font-black text-xs uppercase tracking-wider">
+                      Datos Oficiales de Nómina y Seguridad Social
+                    </h3>
+                  </div>
+                  <span className="text-[10px] font-bold bg-indigo-100 text-indigo-800 px-2 py-0.5 rounded-md">
+                    TGSS / Contrato
+                  </span>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div>
+                    <label className="text-[11px] font-bold uppercase text-slate-600 block mb-1">
+                      Nº Afiliación S.S. (NAF)
+                    </label>
+                    <input
+                      type="text"
+                      value={socialSecurityNumber}
+                      onChange={(e) => setSocialSecurityNumber(e.target.value)}
+                      placeholder="03/10184672-12"
+                      className="w-full bg-white border border-slate-300 p-2.5 rounded-xl font-mono text-xs font-bold text-slate-800 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-[11px] font-bold uppercase text-slate-600 block mb-1">
+                      Fecha de Antigüedad / Alta
+                    </label>
+                    <input
+                      type="date"
+                      value={joinedDate}
+                      onChange={(e) => setJoinedDate(e.target.value)}
+                      className="w-full bg-white border border-slate-300 p-2.5 rounded-xl font-mono text-xs font-bold text-slate-800 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                    />
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
+                  <div>
+                    <label className="text-[10px] font-bold uppercase text-slate-500 block mb-1">
+                      Categoría Nómina
+                    </label>
+                    <input
+                      type="text"
+                      value={professionalCategory}
+                      onChange={(e) => setProfessionalCategory(e.target.value.toUpperCase())}
+                      placeholder="VETERINARI"
+                      className="w-full bg-white border border-slate-300 p-2 rounded-xl font-mono text-xs font-bold text-slate-800 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-[10px] font-bold uppercase text-slate-500 block mb-1">
+                      Cód. Contrato
+                    </label>
+                    <input
+                      type="text"
+                      value={contractCode}
+                      onChange={(e) => setContractCode(e.target.value)}
+                      placeholder="189 / 100"
+                      className="w-full bg-white border border-slate-300 p-2 rounded-xl font-mono text-xs font-bold text-slate-800 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-[10px] font-bold uppercase text-slate-500 block mb-1">
+                      Grupo Tarifa
+                    </label>
+                    <input
+                      type="text"
+                      value={tariffGroup}
+                      onChange={(e) => setTariffGroup(e.target.value)}
+                      placeholder="1 / 8 / 10"
+                      className="w-full bg-white border border-slate-300 p-2 rounded-xl font-mono text-xs font-bold text-slate-800 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-[10px] font-bold uppercase text-slate-500 block mb-1">
+                      Nº Matrícula
+                    </label>
+                    <input
+                      type="text"
+                      value={payrollNumber}
+                      onChange={(e) => setPayrollNumber(e.target.value)}
+                      placeholder="14 / 19 / 21..."
+                      className="w-full bg-white border border-slate-300 p-2 rounded-xl font-mono text-xs font-bold text-slate-800 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                    />
+                  </div>
+                </div>
+
+                <div>
+                  <label className="text-[11px] font-bold uppercase text-slate-600 block mb-1">
+                    Domicilio Fiscal / Particular
+                  </label>
+                  <input
+                    type="text"
+                    value={address}
+                    onChange={(e) => setAddress(e.target.value)}
+                    placeholder="Calle, Número, Código Postal, Municipio y Provincia"
+                    className="w-full bg-white border border-slate-300 p-2.5 rounded-xl text-xs font-semibold text-slate-800 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                  />
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5 pt-1">
+                  <div>
+                    <label className="text-[10px] font-bold uppercase text-slate-500 block mb-1">
+                      Total Devengado (Bruto €)
+                    </label>
+                    <input
+                      type="number"
+                      step="0.01"
+                      value={grossMonthlySalary}
+                      onChange={(e) =>
+                        setGrossMonthlySalary(e.target.value === '' ? '' : Number(e.target.value))
+                      }
+                      placeholder="2013.59"
+                      className="w-full bg-white border border-slate-300 p-2 rounded-xl font-mono text-xs font-bold text-slate-800 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-[10px] font-bold uppercase text-slate-500 block mb-1">
+                      % Retención I.R.P.F.
+                    </label>
+                    <input
+                      type="number"
+                      step="0.01"
+                      value={irpfPercentage}
+                      onChange={(e) =>
+                        setIrpfPercentage(e.target.value === '' ? '' : Number(e.target.value))
+                      }
+                      placeholder="12.62"
+                      className="w-full bg-white border border-slate-300 p-2 rounded-xl font-mono text-xs font-bold text-slate-800 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-[10px] font-bold uppercase text-slate-500 block mb-1">
+                      Líquido a Percibir (Neto €)
+                    </label>
+                    <input
+                      type="number"
+                      step="0.01"
+                      value={netMonthlySalary}
+                      onChange={(e) =>
+                        setNetMonthlySalary(e.target.value === '' ? '' : Number(e.target.value))
+                      }
+                      placeholder="1628.59"
+                      className="w-full bg-white border border-slate-300 p-2 rounded-xl font-mono text-xs font-bold text-emerald-700 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                    />
+                  </div>
                 </div>
               </div>
 

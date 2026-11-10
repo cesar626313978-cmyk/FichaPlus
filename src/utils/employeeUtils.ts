@@ -6,11 +6,13 @@ export const MASTER_ADMIN_RECORD: EmployeeRecord = {
   fullName: 'César Hernández Moreno',
   dni: '21493249W',
   email: 'cesar626313978@gmail.com',
-  phone: '+34 626 313 978',
-  department: 'Compras',
-  jobTitle: 'Director General / Administrador',
-  contractType: 'Indefinido',
+  phone: '+34626313978',
+  department: 'Tienda',
+  jobTitle: 'Encargado / Tienda',
+  contractType: 'Indefinido (Cód. 189)',
   weeklyHours: 40,
+  workdayType: 'COMPLETA',
+  workplaceLocation: 'PG INDUSTRIAL CASAGRAND, S/N - 03183 TORREVIEJA',
   role: 'admin',
   status: 'ACTIVO',
   avatarUrl: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=250&q=80',
@@ -21,11 +23,25 @@ export const MASTER_ADMIN_RECORD: EmployeeRecord = {
   worksSaturday: true,
   saturdayPlan: 'ALTERNO_A',
   saturdayShift: 'Continua (09:00 - 14:00)',
-  vacationDays: 30,
+  vacationDays: 32,
   vacationDaysType: 'NATURALES',
   allowedWorkLocations: ['presencial', 'teletrabajo', 'cliente'],
-  joinedDate: '2022-03-15',
+  joinedDate: '2007-02-21',
   pinCode: '1234',
+  socialSecurityNumber: '03/01094232-09',
+  professionalCategory: 'ENCARGADO',
+  tariffGroup: '1',
+  contractCode: '189',
+  payrollNumber: '14',
+  address: 'CL MADRID 12 BJ, 03690 SAN VICENTE DEL RASPEIG (ALICANTE)',
+  baseSalary: 1474.55,
+  proratedBonus: 255.58,
+  jobAllowance: 58.98,
+  transportAllowance: 68.88,
+  grossMonthlySalary: 1857.99,
+  ssContributionBase: 1989.30,
+  irpfPercentage: 12.92,
+  netMonthlySalary: 1490.80,
 };
 
 export const INITIAL_KNOWN_EMPLOYEES: EmployeeRecord[] = [
@@ -34,13 +50,15 @@ export const INITIAL_KNOWN_EMPLOYEES: EmployeeRecord[] = [
     id: 'emp-002',
     employeeNumber: 'EMP-002',
     fullName: 'Juan María Pérez Escalante',
-    dni: '28934120H',
-    email: 'juan.perez@fichaplus.com',
-    phone: '+34 633 112 233',
-    department: 'Operaciones',
-    jobTitle: 'Técnico Especialista',
-    contractType: 'Indefinido',
+    dni: '44151304K',
+    email: 'chichobow@hotmail.es',
+    phone: '+34627790526',
+    department: 'Tienda',
+    jobTitle: 'Dependiente / Tienda',
+    contractType: 'Indefinido (Cód. 189)',
     weeklyHours: 40,
+    workdayType: 'COMPLETA',
+    workplaceLocation: 'PG INDUSTRIAL CASAGRAND, S/N - 03183 TORREVIEJA',
     role: 'employee',
     status: 'ACTIVO',
     avatarUrl: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&w=250&q=80',
@@ -51,11 +69,24 @@ export const INITIAL_KNOWN_EMPLOYEES: EmployeeRecord[] = [
     worksSaturday: true,
     saturdayPlan: 'ALTERNO_B',
     saturdayShift: 'Continua (09:00 - 14:00)',
-    vacationDays: 30,
+    vacationDays: 32,
     vacationDaysType: 'NATURALES',
     allowedWorkLocations: ['presencial', 'teletrabajo'],
-    joinedDate: '2023-01-10',
-    pinCode: '1234',
+    joinedDate: '2016-09-05',
+    pinCode: '0308',
+    socialSecurityNumber: '03/10157616-19',
+    professionalCategory: 'DEPENDIENT',
+    tariffGroup: '8',
+    contractCode: '189',
+    payrollNumber: '34',
+    address: 'UR TORRETA II 247, 03184 TORREVIEJA (ALICANTE)',
+    baseSalary: 1282.22,
+    proratedBonus: 213.70,
+    transportAllowance: 68.88,
+    grossMonthlySalary: 1564.80,
+    ssContributionBase: 1564.80,
+    irpfPercentage: 9.38,
+    netMonthlySalary: 1316.31,
   },
   {
     id: 'emp-003',
@@ -65,9 +96,11 @@ export const INITIAL_KNOWN_EMPLOYEES: EmployeeRecord[] = [
     email: 'nati.com.es02022003@gmail.com',
     phone: '+34610046962',
     department: 'Tienda',
-    jobTitle: 'Ventas',
-    contractType: 'Indefinido',
+    jobTitle: 'Tienda / Auxiliar de Limpieza',
+    contractType: 'Indefinido Ordinario (Cód. 100)',
     weeklyHours: 40,
+    workdayType: 'COMPLETA',
+    workplaceLocation: 'PG INDUSTRIAL CASAGRAND, S/N - 03183 TORREVIEJA',
     role: 'employee',
     status: 'ACTIVO',
     avatarUrl: 'https://images.unsplash.com/photo-1544005313-94ddf0286df2?auto=format&fit=crop&w=250&q=80',
@@ -78,23 +111,38 @@ export const INITIAL_KNOWN_EMPLOYEES: EmployeeRecord[] = [
     worksSaturday: true,
     saturdayPlan: 'ALTERNO_A',
     saturdayShift: 'Partida (09:00 - 14:00)',
-    vacationDays: 30,
+    vacationDays: 32,
     vacationDaysType: 'NATURALES',
     allowedWorkLocations: ['presencial'],
-    joinedDate: '2023-05-15',
-    pinCode: '1234',
+    joinedDate: '2024-03-18',
+    pinCode: '1510',
+    socialSecurityNumber: '02/10112095-07',
+    professionalCategory: 'AUX LIMPIE',
+    tariffGroup: '10',
+    contractCode: '100',
+    payrollNumber: '31',
+    address: 'UR PARQUE DE LAS NACIONES 117 B, 03182 TORREVIEJA (ALICANTE)',
+    baseSalary: 1282.22,
+    proratedBonus: 213.70,
+    transportAllowance: 68.88,
+    grossMonthlySalary: 1564.80,
+    ssContributionBase: 1564.80,
+    irpfPercentage: 7.29,
+    netMonthlySalary: 1349.02,
   },
   {
     id: 'emp-004',
     employeeNumber: 'EMP-004',
     fullName: 'Yolanda Fernández Orge',
-    dni: '53189234R',
-    email: 'yolanda.fernandez@fichaplus.com',
-    phone: '+34 644 223 344',
-    department: 'Atención al Cliente',
-    jobTitle: 'Gestora Comercial',
-    contractType: 'Indefinido',
+    dni: '01183503S',
+    email: 'yfernandezorge@gmail.com',
+    phone: '+34622476458',
+    department: 'Tienda',
+    jobTitle: 'Tienda / Auxiliar de Limpieza',
+    contractType: 'Indefinido (Cód. 189)',
     weeklyHours: 40,
+    workdayType: 'COMPLETA',
+    workplaceLocation: 'PG INDUSTRIAL CASAGRAND, S/N - 03183 TORREVIEJA',
     role: 'employee',
     status: 'ACTIVO',
     avatarUrl: 'https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?auto=format&fit=crop&w=250&q=80',
@@ -105,13 +153,222 @@ export const INITIAL_KNOWN_EMPLOYEES: EmployeeRecord[] = [
     worksSaturday: true,
     saturdayPlan: 'ALTERNO_B',
     saturdayShift: 'Continua (09:00 - 14:00)',
+    vacationDays: 32,
+    vacationDaysType: 'NATURALES',
+    allowedWorkLocations: ['presencial', 'cliente'],
+    joinedDate: '2021-05-03',
+    pinCode: '3110',
+    socialSecurityNumber: '28/10172843-05',
+    professionalCategory: 'AUX LIMPIE',
+    tariffGroup: '10',
+    contractCode: '189',
+    payrollNumber: '40',
+    address: 'CL ALEXANDER FLEMING 95, 03183 TORREVIEJA (ALICANTE)',
+    baseSalary: 1282.22,
+    proratedBonus: 213.70,
+    transportAllowance: 68.88,
+    grossMonthlySalary: 1564.80,
+    ssContributionBase: 1564.80,
+    irpfPercentage: 9.38,
+    netMonthlySalary: 1316.31,
+  },
+  {
+    id: 'emp-005',
+    employeeNumber: 'EMP-005',
+    fullName: 'Rocío Alcocer Ballester',
+    dni: '48457314V',
+    email: 'roalcocerballester@gmail.com',
+    phone: '+34617453732',
+    department: 'Veterinario',
+    jobTitle: 'Veterinaria',
+    contractType: 'Indefinido (Cód. 189)',
+    weeklyHours: 40,
+    workdayType: 'COMPLETA',
+    workplaceLocation: 'PG INDUSTRIAL CASAGRAND, S/N - 03183 TORREVIEJA',
+    role: 'employee',
+    status: 'ACTIVO',
+    avatarUrl: 'https://images.unsplash.com/photo-1559839734-2b71ea197ec2?auto=format&fit=crop&w=250&q=80',
+    hasRotatingShifts: true,
+    rotationStartDate: '2026-01-05',
+    shiftWeekA: 'Continua (09:00 - 17:00)',
+    shiftWeekB: 'Partida (09:00 - 14:00 / 16:30 - 19:30)',
+    worksSaturday: true,
+    saturdayPlan: 'ALTERNO_A',
+    saturdayShift: 'Continua (09:00 - 14:00)',
     vacationDays: 30,
     vacationDaysType: 'NATURALES',
     allowedWorkLocations: ['presencial', 'cliente'],
-    joinedDate: '2023-09-01',
-    pinCode: '1234',
+    joinedDate: '2009-08-10',
+    pinCode: '8015',
+    socialSecurityNumber: '03/10184672-12',
+    professionalCategory: 'VETERINARI',
+    tariffGroup: '1',
+    contractCode: '189',
+    payrollNumber: '19',
+    address: 'UR CALAS BLANCAS PLGONO II 69, 03183 TORREVIEJA (ALICANTE)',
+    baseSalary: 1666.89,
+    proratedBonus: 277.82,
+    transportAllowance: 68.88,
+    grossMonthlySalary: 2013.59,
+    ssContributionBase: 2013.59,
+    irpfPercentage: 12.62,
+    netMonthlySalary: 1628.59,
+  },
+  {
+    id: 'emp-006',
+    employeeNumber: 'EMP-006',
+    fullName: 'Sergio Arredondo Navarrete',
+    dni: '76148344J',
+    email: 'sergiofreila2@gmail.com',
+    phone: '+34606106142',
+    department: 'Veterinario',
+    jobTitle: 'Veterinario',
+    contractType: 'Indefinido (Cód. 189)',
+    weeklyHours: 40,
+    workdayType: 'COMPLETA',
+    workplaceLocation: 'PG INDUSTRIAL CASAGRAND, S/N - 03183 TORREVIEJA',
+    role: 'employee',
+    status: 'ACTIVO',
+    avatarUrl: 'https://images.unsplash.com/photo-1622253692010-333f2da6031d?auto=format&fit=crop&w=250&q=80',
+    hasRotatingShifts: true,
+    rotationStartDate: '2026-01-05',
+    shiftWeekA: 'Partida (09:00 - 14:00 / 16:30 - 19:30)',
+    shiftWeekB: 'Continua (09:00 - 17:00)',
+    worksSaturday: true,
+    saturdayPlan: 'ALTERNO_B',
+    saturdayShift: 'Continua (09:00 - 14:00)',
+    vacationDays: 30,
+    vacationDaysType: 'NATURALES',
+    allowedWorkLocations: ['presencial', 'cliente'],
+    joinedDate: '2009-12-10',
+    pinCode: '0987',
+    socialSecurityNumber: '14/10244276-76',
+    professionalCategory: 'VETERINARI',
+    tariffGroup: '1',
+    contractCode: '189',
+    payrollNumber: '21',
+    address: 'CL RODRIGO DE TRIANA 2, 1º D, 03140 GUARDAMAR DEL SEGURA (ALICANTE)',
+    baseSalary: 1666.89,
+    proratedBonus: 277.82,
+    transportAllowance: 68.88,
+    grossMonthlySalary: 2013.59,
+    ssContributionBase: 2013.59,
+    irpfPercentage: 12.62,
+    netMonthlySalary: 1628.59,
+  },
+  {
+    id: 'emp-007',
+    employeeNumber: 'EMP-007',
+    fullName: 'Almudena Rueda Gomariz',
+    dni: '71358103M',
+    email: 'almurueda7@gmail.com',
+    phone: '+34665178613',
+    department: 'Veterinaria',
+    jobTitle: 'Veterinaria',
+    contractType: 'Indefinido Ordinario (Cód. 100)',
+    weeklyHours: 40,
+    workdayType: 'COMPLETA',
+    workplaceLocation: 'PG INDUSTRIAL CASAGRAND, S/N - 03183 TORREVIEJA',
+    role: 'employee',
+    status: 'ACTIVO',
+    avatarUrl: 'https://images.unsplash.com/photo-1594824476967-48c8b964273f?auto=format&fit=crop&w=250&q=80',
+    hasRotatingShifts: true,
+    rotationStartDate: '2026-01-05',
+    shiftWeekA: 'Continua (09:00 - 17:00)',
+    shiftWeekB: 'Partida (09:00 - 14:00 / 16:30 - 19:30)',
+    worksSaturday: true,
+    saturdayPlan: 'ALTERNO_A',
+    saturdayShift: 'Continua (09:00 - 14:00)',
+    vacationDays: 30,
+    vacationDaysType: 'NATURALES',
+    allowedWorkLocations: ['presencial', 'cliente'],
+    joinedDate: '2023-02-02',
+    pinCode: '0503',
+    socialSecurityNumber: '13/10322904-53',
+    professionalCategory: 'VETERINARI',
+    tariffGroup: '1',
+    contractCode: '100',
+    payrollNumber: '43',
+    address: 'CL CONCORDIA 13, 13326 MONTIEL (CIUDAD REAL)',
+    baseSalary: 1666.89,
+    proratedBonus: 277.82,
+    transportAllowance: 68.88,
+    grossMonthlySalary: 2013.59,
+    ssContributionBase: 2013.59,
+    irpfPercentage: 14.47,
+    netMonthlySalary: 1591.34,
   },
 ];
+
+// Legacy placeholder values that should be automatically replaced by the official payroll & contact values
+const LEGACY_PLACEHOLDER_DNIS = new Set([
+  '00000000A',
+  '12345678X',
+  '28934120H',
+  '53189234R',
+  'PENDIENTE',
+]);
+
+const LEGACY_PLACEHOLDER_JOIN_DATES = new Set([
+  '2022-03-15',
+  '2023-01-10',
+  '2023-05-15',
+  '2023-09-01',
+  '2024-01-01',
+]);
+
+const LEGACY_PLACEHOLDER_JOB_TITLES = new Set([
+  'Técnico Especialista',
+  'Gestora Comercial',
+  'Ventas',
+  'Director General / Administrador',
+  'Especialista',
+  'Encargado / Administrador',
+  'Dependiente',
+  'Auxiliar de Limpieza',
+]);
+
+const LEGACY_PLACEHOLDER_DEPTS = new Set([
+  'Operaciones',
+  'Atención al Cliente',
+  'Compras',
+  'Dirección y Compras',
+  'Tienda y Comercial',
+  'Tienda y Mantenimiento',
+  'Clínica Veterinaria',
+]);
+
+const LEGACY_PLACEHOLDER_PHONES = new Set([
+  '+34 633 112 233',
+  '+34 644 223 344',
+  '+34 655 101 846',
+  '+34 666 244 276',
+  '+34 677 322 904',
+  '+34 626 313 978',
+  '+34 600 000 000',
+  '633112233',
+  '644223344',
+  '655101846',
+  '666244276',
+  '677322904',
+]);
+
+const isPlaceholderEmail = (email?: string): boolean => {
+  if (!email) return true;
+  const lower = email.trim().toLowerCase();
+  return (
+    lower.endsWith('@fichaplus.com') ||
+    lower.endsWith('@torremascotas.com') ||
+    lower.endsWith('@torremascotas.es')
+  );
+};
+
+const isPlaceholderPhone = (phone?: string): boolean => {
+  if (!phone || !phone.trim()) return true;
+  const trimmed = phone.trim();
+  const digits = trimmed.replace(/\D/g, '').slice(-9);
+  return LEGACY_PLACEHOLDER_PHONES.has(trimmed) || LEGACY_PLACEHOLDER_PHONES.has(digits);
+};
 
 /**
  * Calculates the next sequential employee number, e.g. EMP-001, EMP-002...
@@ -167,6 +424,8 @@ export const isMasterAdmin = (emp?: Partial<EmployeeRecord> | null): boolean => 
   if (email === 'cesar626313978@gmail.com') return true;
   const normName = normalizeName(emp.fullName || '');
   if (normName === 'cesar hernandez moreno' || normName === 'cesar hernandez') return true;
+  const dni = (emp.dni || '').toUpperCase().trim();
+  if (dni === '21493249W') return true;
   return false;
 };
 
@@ -180,11 +439,17 @@ export const areSamePerson = (
   if (!a || !b) return false;
   if (a.id && b.id && a.id === b.id) return true;
 
-  // Name check (normalized)
+  // Name check (normalized, including partial match for Nataliya Holoskova vs Nataliya Holoskova Panchyshyn)
   const nameA = normalizeName(a.fullName || '');
   const nameB = normalizeName(b.fullName || '');
-  if (nameA && nameB && nameA === nameB && nameA.length > 3) {
-    return true;
+  if (nameA && nameB && nameA.length > 3 && nameB.length > 3) {
+    if (nameA === nameB) return true;
+    if (
+      (nameA.startsWith('nataliya holoskova') && nameB.startsWith('nataliya holoskova')) ||
+      (nameA.startsWith('juan maria perez') && nameB.startsWith('juan maria perez'))
+    ) {
+      return true;
+    }
   }
 
   // Email check
@@ -201,16 +466,28 @@ export const areSamePerson = (
     dniA &&
     dniB &&
     dniA === dniB &&
-    dniA !== '00000000A' &&
-    dniA !== '12345678X'
+    !LEGACY_PLACEHOLDER_DNIS.has(dniA)
   ) {
     return true;
   }
 
-  // Phone check (last 9 digits)
+  // Social Security Number check
+  const ssA = (a.socialSecurityNumber || '').trim();
+  const ssB = (b.socialSecurityNumber || '').trim();
+  if (ssA && ssB && ssA === ssB) {
+    return true;
+  }
+
+  // Phone check (last 9 digits, ignoring placeholder phones)
   const phoneA = getCleanPhoneDigits(a.phone);
   const phoneB = getCleanPhoneDigits(b.phone);
-  if (phoneA && phoneB && phoneA.length === 9 && phoneA === phoneB) {
+  if (
+    phoneA &&
+    phoneB &&
+    phoneA.length === 9 &&
+    phoneA === phoneB &&
+    !LEGACY_PLACEHOLDER_PHONES.has(phoneA)
+  ) {
     return true;
   }
 
@@ -218,14 +495,96 @@ export const areSamePerson = (
 };
 
 /**
+ * Enriches an employee record with official payroll & contact data from INITIAL_KNOWN_EMPLOYEES
+ * if a matching official record exists, replacing old demo placeholders while preserving user customizations.
+ */
+const enrichWithOfficialPayrollRecord = (emp: EmployeeRecord): EmployeeRecord => {
+  const official = INITIAL_KNOWN_EMPLOYEES.find((k) => areSamePerson(k, emp));
+  if (!official) return emp;
+
+  const currentDni = (emp.dni || '').trim().toUpperCase();
+  const resolvedDni =
+    !currentDni || LEGACY_PLACEHOLDER_DNIS.has(currentDni) ? official.dni : currentDni;
+
+  const resolvedJoinedDate =
+    !emp.joinedDate || LEGACY_PLACEHOLDER_JOIN_DATES.has(emp.joinedDate)
+      ? official.joinedDate
+      : emp.joinedDate;
+
+  const resolvedJobTitle =
+    !emp.jobTitle || LEGACY_PLACEHOLDER_JOB_TITLES.has(emp.jobTitle)
+      ? official.jobTitle
+      : emp.jobTitle;
+
+  const resolvedDepartment =
+    !emp.department || LEGACY_PLACEHOLDER_DEPTS.has(emp.department)
+      ? official.department
+      : emp.department;
+
+  const resolvedContractType =
+    !emp.contractType || emp.contractType === 'Indefinido' || emp.contractType === 'TIEMPO COMPLETO'
+      ? official.contractType
+      : emp.contractType;
+
+  const resolvedEmail = isPlaceholderEmail(emp.email)
+    ? official.email
+    : emp.email;
+
+  const resolvedPhone = isPlaceholderPhone(emp.phone)
+    ? official.phone
+    : emp.phone;
+
+  const resolvedPinCode =
+    !emp.pinCode || emp.pinCode === '1234'
+      ? official.pinCode
+      : emp.pinCode;
+
+  const resolvedVacationDays =
+    !emp.vacationDays || (emp.vacationDays === 30 && official.vacationDays === 32)
+      ? official.vacationDays
+      : emp.vacationDays;
+
+  return {
+    ...official,
+    ...emp,
+    fullName: official.fullName,
+    dni: resolvedDni,
+    email: resolvedEmail,
+    phone: resolvedPhone,
+    pinCode: resolvedPinCode,
+    vacationDays: resolvedVacationDays,
+    joinedDate: resolvedJoinedDate,
+    jobTitle: resolvedJobTitle,
+    department: resolvedDepartment,
+    contractType: resolvedContractType,
+    workplaceLocation: emp.workplaceLocation || official.workplaceLocation,
+    socialSecurityNumber: emp.socialSecurityNumber || official.socialSecurityNumber,
+    professionalCategory: emp.professionalCategory || official.professionalCategory,
+    tariffGroup: emp.tariffGroup || official.tariffGroup,
+    contractCode: emp.contractCode || official.contractCode,
+    payrollNumber: emp.payrollNumber || official.payrollNumber,
+    address: emp.address || official.address,
+    baseSalary: emp.baseSalary ?? official.baseSalary,
+    proratedBonus: emp.proratedBonus ?? official.proratedBonus,
+    jobAllowance: emp.jobAllowance ?? official.jobAllowance,
+    transportAllowance: emp.transportAllowance ?? official.transportAllowance,
+    grossMonthlySalary: emp.grossMonthlySalary ?? official.grossMonthlySalary,
+    ssContributionBase: emp.ssContributionBase ?? official.ssContributionBase,
+    irpfPercentage: emp.irpfPercentage ?? official.irpfPercentage,
+    netMonthlySalary: emp.netMonthlySalary ?? official.netMonthlySalary,
+  };
+};
+
+/**
  * Cleans, deduplicates and reconciles the employee directory.
  * - Merges duplicate records of the same person (e.g. same name or same email/DNI/phone).
  * - Guarantees the Master Admin user (César Hernández Moreno, EMP-001) is ALWAYS present.
+ * - Guarantees all 7 official TORREMASCOTAS S.L. employees are present and enriched with official payroll data.
  * - Guarantees sequential, unique employee numbers (EMP-001, EMP-002, EMP-003, no duplicates).
  */
 export const reconcileAndDeduplicateEmployees = (
   storedList: EmployeeRecord[],
-  initialEmployees?: EmployeeRecord[],
+  initialEmployees: EmployeeRecord[] = INITIAL_KNOWN_EMPLOYEES,
   adminProfile?: { name?: string; email?: string; dni?: string; phone?: string }
 ): EmployeeRecord[] => {
   // Clear any accidental deletion of admin from deleted IDs
@@ -258,29 +617,31 @@ export const reconcileAndDeduplicateEmployees = (
   const seenPersons: EmployeeRecord[] = [];
   let foundAdminRecord: EmployeeRecord | null = null;
 
-  const addOrMergePerson = (incoming: EmployeeRecord) => {
-    if (!incoming || !incoming.fullName) return;
-    if (isExplicitlyDeleted(incoming.id)) return;
+  const addOrMergePerson = (rawIncoming: EmployeeRecord) => {
+    if (!rawIncoming || !rawIncoming.fullName) return;
+    if (isExplicitlyDeleted(rawIncoming.id)) return;
+
+    const incoming = enrichWithOfficialPayrollRecord(rawIncoming);
 
     // Check if incoming is the master admin César
     if (isMasterAdmin(incoming)) {
       if (!foundAdminRecord) {
-        foundAdminRecord = {
+        foundAdminRecord = enrichWithOfficialPayrollRecord({
           ...MASTER_ADMIN_RECORD,
           ...incoming,
           id: 'emp-001',
           employeeNumber: 'EMP-001',
           role: 'admin',
           status: 'ACTIVO',
-        };
+        });
       } else {
-        foundAdminRecord = {
+        foundAdminRecord = enrichWithOfficialPayrollRecord({
           ...foundAdminRecord,
           ...incoming,
           id: 'emp-001',
           employeeNumber: 'EMP-001',
           role: 'admin',
-        };
+        });
       }
       return;
     }
@@ -295,46 +656,57 @@ export const reconcileAndDeduplicateEmployees = (
     const existingIndex = seenPersons.findIndex((p) => areSamePerson(p, empToProcess));
 
     if (existingIndex >= 0) {
-      // Merge: prefer real DNI, prefer better phone, prefer valid email
+      // Merge: prefer real DNI, prefer real phone, prefer valid non-placeholder email
       const existing = seenPersons[existingIndex];
       const bestDni =
-        empToProcess.dni && empToProcess.dni.length >= 8 && !empToProcess.dni.includes('00000000')
+        empToProcess.dni &&
+        empToProcess.dni.length >= 8 &&
+        !LEGACY_PLACEHOLDER_DNIS.has(empToProcess.dni.toUpperCase())
           ? empToProcess.dni
-          : existing.dni || empToProcess.dni;
+          : existing.dni && !LEGACY_PLACEHOLDER_DNIS.has(existing.dni.toUpperCase())
+          ? existing.dni
+          : empToProcess.dni || existing.dni;
       const bestEmail =
-        empToProcess.email && empToProcess.email.includes('@')
+        !isPlaceholderEmail(empToProcess.email)
           ? empToProcess.email
-          : existing.email || empToProcess.email;
+          : !isPlaceholderEmail(existing.email)
+          ? existing.email
+          : empToProcess.email || existing.email;
       const bestPhone =
-        empToProcess.phone && empToProcess.phone.length >= 9
+        !isPlaceholderPhone(empToProcess.phone)
           ? empToProcess.phone
-          : existing.phone || empToProcess.phone;
+          : !isPlaceholderPhone(existing.phone)
+          ? existing.phone
+          : empToProcess.phone || existing.phone;
 
-      seenPersons[existingIndex] = {
+      seenPersons[existingIndex] = enrichWithOfficialPayrollRecord({
         ...existing,
         ...empToProcess,
         dni: bestDni,
         email: bestEmail,
         phone: bestPhone,
         id: existing.id || empToProcess.id,
-        // Keep active status if either was active
         status: existing.status === 'ACTIVO' || empToProcess.status === 'ACTIVO' ? 'ACTIVO' : empToProcess.status,
-      };
+      });
     } else {
       seenPersons.push({ ...empToProcess });
     }
   };
 
-  // Add all stored employees
+  // Add all stored employees first
   if (Array.isArray(storedList)) {
     storedList.forEach(addOrMergePerson);
   }
 
-  // Only initialize with initial employees if storedList was completely empty/undefined,
-  // AND initialEmployees was explicitly provided, AND no company reset flag exists.
+  // Always ensure all 7 official employees from TORREMASCOTAS S.L. (INITIAL_KNOWN_EMPLOYEES)
+  // are present in the directory unless the company was explicitly wiped via reset or the employee was deleted
   const isReset = typeof window !== 'undefined' && localStorage.getItem('fichaplus_is_reset') === 'true';
-  if (!isReset && (!storedList || storedList.length === 0) && seenPersons.length === 0 && Array.isArray(initialEmployees) && initialEmployees.length > 0) {
-    for (const initEmp of initialEmployees) {
+  const rosterToEnsure = Array.isArray(initialEmployees) && initialEmployees.length > 0
+    ? initialEmployees
+    : INITIAL_KNOWN_EMPLOYEES;
+
+  if (!isReset) {
+    for (const initEmp of rosterToEnsure) {
       if (!isExplicitlyDeleted(initEmp.id)) {
         addOrMergePerson(initEmp);
       }
@@ -343,13 +715,16 @@ export const reconcileAndDeduplicateEmployees = (
 
   // Ensure Admin record is ALWAYS initialized
   if (!foundAdminRecord) {
-    foundAdminRecord = {
+    foundAdminRecord = enrichWithOfficialPayrollRecord({
       ...MASTER_ADMIN_RECORD,
       fullName: adminProfile?.name || MASTER_ADMIN_RECORD.fullName,
       email: adminProfile?.email || MASTER_ADMIN_RECORD.email,
       phone: adminProfile?.phone || MASTER_ADMIN_RECORD.phone,
-      dni: adminProfile?.dni || MASTER_ADMIN_RECORD.dni,
-    };
+      dni:
+        adminProfile?.dni && !LEGACY_PLACEHOLDER_DNIS.has(adminProfile.dni.toUpperCase())
+          ? adminProfile.dni
+          : MASTER_ADMIN_RECORD.dni,
+    });
   }
 
   // Admin is ALWAYS position 0

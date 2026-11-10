@@ -3,7 +3,7 @@ import { User, signInWithPopup, signOut as fbSignOut, onAuthStateChanged } from 
 import { doc, getDoc, setDoc } from 'firebase/firestore';
 import { auth, db, googleProvider } from '../firebase';
 import { UserProfile, EmployeeRecord } from '../types';
-import { MASTER_ADMIN_RECORD, INITIAL_KNOWN_EMPLOYEES } from '../utils/employeeUtils';
+import { MASTER_ADMIN_RECORD, INITIAL_KNOWN_EMPLOYEES, reconcileAndDeduplicateEmployees } from '../utils/employeeUtils';
 
 export interface AuthResult {
   success: boolean;
@@ -62,7 +62,7 @@ export const getKnownEmployees = (): EmployeeRecord[] => {
     const saved = localStorage.getItem('fichaplus_employees');
     if (saved) {
       const parsed = JSON.parse(saved);
-      if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+      if (Array.isArray(parsed) && parsed.length > 0) return reconcileAndDeduplicateEmployees(parsed);
     }
   } catch (e) {}
 

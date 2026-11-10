@@ -27,9 +27,11 @@ export const ProfileView: React.FC = () => {
   const activeContract = matchingEmployee?.contractType || profile.contractType || '';
   const activeHours = matchingEmployee?.weeklyHours || profile.weeklyHours || 40;
   const activeEmployeeNumber = matchingEmployee?.employeeNumber || 'EMP-001';
+  const activeAddress = matchingEmployee?.address || '';
 
   const [phone, setPhone] = useState(activePhone);
   const [dni, setDni] = useState(activeDni);
+  const [address, setAddress] = useState(activeAddress);
   const [savedSuccess, setSavedSuccess] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [showInviteModal, setShowInviteModal] = useState(false);
@@ -46,6 +48,12 @@ export const ProfileView: React.FC = () => {
       setPhone(activePhone);
     }
   }, [activePhone]);
+
+  useEffect(() => {
+    if (activeAddress && activeAddress !== address) {
+      setAddress(activeAddress);
+    }
+  }, [activeAddress]);
 
   // Keep AuthContext profile synchronized with employee record
   useEffect(() => {
@@ -83,9 +91,10 @@ export const ProfileView: React.FC = () => {
     try {
       const cleanDni = dni.trim().toUpperCase();
       const cleanPhone = phone.trim();
+      const cleanAddress = address.trim();
       await updateProfileData({ phone: cleanPhone, dni: cleanDni });
       if (matchingEmployee?.id) {
-        await updateEmployee(matchingEmployee.id, { phone: cleanPhone, dni: cleanDni });
+        await updateEmployee(matchingEmployee.id, { phone: cleanPhone, dni: cleanDni, address: cleanAddress });
       }
       setSavedSuccess(true);
       setTimeout(() => setSavedSuccess(false), 3000);
@@ -258,10 +267,15 @@ export const ProfileView: React.FC = () => {
               {activeEmployeeNumber}
             </span>
           </div>
-          <div className="flex flex-wrap items-center justify-center md:justify-start gap-3 text-xs font-mono text-slate-500 mb-4">
+          <div className="flex flex-wrap items-center justify-center md:justify-start gap-2.5 text-xs font-mono text-slate-500 mb-4">
             <span>{matchingEmployee?.email || profile.email}</span>
             <span className="text-slate-300">•</span>
             <span className="font-bold text-indigo-900 bg-indigo-50 px-2 py-0.5 rounded-md">DNI: {activeDni}</span>
+            {fallbackEmployee.socialSecurityNumber && (
+              <span className="font-bold text-emerald-900 bg-emerald-50 border border-emerald-200 px-2 py-0.5 rounded-md">
+                NAF S.S.: {fallbackEmployee.socialSecurityNumber}
+              </span>
+            )}
           </div>
 
           <div className="flex flex-wrap justify-center md:justify-start gap-2">
@@ -269,8 +283,18 @@ export const ProfileView: React.FC = () => {
               🏢 Dpto: {activeDepartment}
             </span>
             <span className="bg-slate-50 text-slate-700 border border-slate-100 px-3 py-1.5 rounded-xl text-xs font-semibold">
-              📋 Contrato: {activeContract}
+              📋 Contrato: {activeContract} {fallbackEmployee.contractCode ? `(Cód. ${fallbackEmployee.contractCode})` : ''}
             </span>
+            {fallbackEmployee.professionalCategory && (
+              <span className="bg-slate-50 text-slate-700 border border-slate-100 px-3 py-1.5 rounded-xl text-xs font-semibold">
+                🏷 Categoría: {fallbackEmployee.professionalCategory} {fallbackEmployee.tariffGroup ? `(G. Cotiz. ${fallbackEmployee.tariffGroup})` : ''}
+              </span>
+            )}
+            {fallbackEmployee.joinedDate && (
+              <span className="bg-slate-50 text-slate-700 border border-slate-100 px-3 py-1.5 rounded-xl text-xs font-semibold">
+                📅 Antigüedad: {fallbackEmployee.joinedDate.split('-').reverse().join('/')}
+              </span>
+            )}
             <span className="bg-slate-50 text-slate-700 border border-slate-100 px-3 py-1.5 rounded-xl text-xs font-semibold">
               ⏱ Jornada: {activeHours}h/semana
             </span>
@@ -294,13 +318,38 @@ export const ProfileView: React.FC = () => {
               );
             })()}
           </div>
+
+          {(fallbackEmployee.address || fallbackEmployee.netMonthlySalary) && (
+            <div className="mt-4 pt-3 border-t border-slate-100 flex flex-wrap items-center justify-center md:justify-start gap-2">
+              {fallbackEmployee.address && (
+                <span className="text-[11px] font-semibold text-slate-600 bg-slate-50 border border-slate-200 px-2.5 py-1 rounded-lg">
+                  🏠 Domicilio: {fallbackEmployee.address}
+                </span>
+              )}
+              {fallbackEmployee.grossMonthlySalary && (
+                <span className="text-[11px] font-bold text-slate-700 bg-slate-100 border border-slate-200 px-2.5 py-1 rounded-lg">
+                  💶 Bruto mensual: {fallbackEmployee.grossMonthlySalary.toLocaleString('es-ES', { minimumFractionDigits: 2 })} €
+                </span>
+              )}
+              {fallbackEmployee.irpfPercentage !== undefined && (
+                <span className="text-[11px] font-bold text-amber-800 bg-amber-50 border border-amber-200 px-2.5 py-1 rounded-lg">
+                  📊 Retención IRPF: {fallbackEmployee.irpfPercentage.toLocaleString('es-ES', { minimumFractionDigits: 2 })}%
+                </span>
+              )}
+              {fallbackEmployee.netMonthlySalary && (
+                <span className="text-[11px] font-bold text-emerald-800 bg-emerald-50 border border-emerald-200 px-2.5 py-1 rounded-lg">
+                  ✅ Líquido a percibir: {fallbackEmployee.netMonthlySalary.toLocaleString('es-ES', { minimumFractionDigits: 2 })} €
+                </span>
+              )}
+            </div>
+          )}
         </div>
       </div>
 
       {/* Personal Info Form */}
       <form onSubmit={handleSave} className="bg-white rounded-3xl border border-slate-100 p-6 sm:p-8 shadow-sm space-y-5">
         <h3 className="font-bold text-lg text-slate-900 pb-3 border-b border-slate-100">
-          Mis Datos de Identificación
+          Mis Datos de Identificación y Domicilio
         </h3>
 
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -324,6 +373,19 @@ export const ProfileView: React.FC = () => {
               type="text"
               value={phone}
               onChange={(e) => setPhone(e.target.value)}
+              className="w-full bg-slate-50 border border-slate-200 p-3 rounded-xl font-semibold text-sm focus:ring-2 focus:ring-indigo-500 focus:bg-white focus:outline-none transition-all"
+            />
+          </div>
+
+          <div className="sm:col-span-2">
+            <label className="text-xs font-bold uppercase tracking-wider text-slate-500 block mb-1.5">
+              Domicilio Fiscal / Particular
+            </label>
+            <input
+              type="text"
+              value={address}
+              onChange={(e) => setAddress(e.target.value)}
+              placeholder="Ej: CL MADRID 12 BJ, 03690 SAN VICENTE DEL RASPEIG (ALICANTE)"
               className="w-full bg-slate-50 border border-slate-200 p-3 rounded-xl font-semibold text-sm focus:ring-2 focus:ring-indigo-500 focus:bg-white focus:outline-none transition-all"
             />
           </div>

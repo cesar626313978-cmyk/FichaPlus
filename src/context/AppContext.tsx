@@ -167,12 +167,12 @@ interface AppContextType {
 const INITIAL_EMPLOYEES: EmployeeRecord[] = INITIAL_KNOWN_EMPLOYEES;
 
 const INITIAL_COMPANY: CompanySettings = {
-  companyName: 'FichaPlus',
-  fiscalId: 'B-12345678',
-  cccCode: '28 123456789 (Régimen General)',
-  workplaceAddress: 'Calle Principal 1',
-  workplaceCity: 'Madrid, 28001',
-  collectiveAgreement: 'Convenio Colectivo Estatal del Sector de Oficinas y Despachos',
+  companyName: 'TORREMASCOTAS S.L.',
+  fiscalId: 'B54009725',
+  cccCode: '03/1182713-26 (Cód. Empresa: 99056)',
+  workplaceAddress: 'PG INDUSTRIAL CASAGRAND, S/N',
+  workplaceCity: '03183 TORREVIEJA (ALICANTE)',
+  collectiveAgreement: 'Convenio Colectivo Estatal de Centros y Servicios Veterinarios',
   annualHoursLimit: 1780,
   overtimeYearlyLimit: 80,
   intershiftRestHours: 12,
@@ -347,7 +347,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     };
   }, [employees, profile]);
 
-  // Auto-heal, deduplicate, and guarantee Master Admin is ALWAYS restored
+  // Auto-heal, deduplicate, and guarantee Master Admin and all 7 TORREMASCOTAS S.L. employees are restored and enriched
   useEffect(() => {
     const reconciled = reconcileAndDeduplicateEmployees(employees, INITIAL_EMPLOYEES, profile);
     const isDifferent =
@@ -356,6 +356,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         (rec, i) =>
           rec.id !== employees[i]?.id ||
           rec.fullName !== employees[i]?.fullName ||
+          rec.dni !== employees[i]?.dni ||
+          rec.socialSecurityNumber !== employees[i]?.socialSecurityNumber ||
+          rec.joinedDate !== employees[i]?.joinedDate ||
+          rec.jobTitle !== employees[i]?.jobTitle ||
           rec.employeeNumber !== employees[i]?.employeeNumber ||
           rec.email !== employees[i]?.email
       );
@@ -623,7 +627,28 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const [companySettings, setCompanySettings] = useState<CompanySettings>(() => {
     try {
       const saved = localStorage.getItem('fichaplus_company_settings');
-      return saved ? { ...INITIAL_COMPANY, ...JSON.parse(saved) } : INITIAL_COMPANY;
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        const isLegacyPlaceholder =
+          !parsed.companyName ||
+          parsed.companyName === 'FichaPlus' ||
+          parsed.fiscalId === 'B-12345678';
+        const merged: CompanySettings = isLegacyPlaceholder
+          ? {
+              ...INITIAL_COMPANY,
+              ...parsed,
+              companyName: INITIAL_COMPANY.companyName,
+              fiscalId: INITIAL_COMPANY.fiscalId,
+              cccCode: INITIAL_COMPANY.cccCode,
+              workplaceAddress: INITIAL_COMPANY.workplaceAddress,
+              workplaceCity: INITIAL_COMPANY.workplaceCity,
+              collectiveAgreement: INITIAL_COMPANY.collectiveAgreement,
+            }
+          : { ...INITIAL_COMPANY, ...parsed };
+        localStorage.setItem('fichaplus_company_settings', JSON.stringify(merged));
+        return merged;
+      }
+      return INITIAL_COMPANY;
     } catch {
       return INITIAL_COMPANY;
     }
@@ -1273,8 +1298,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
 
   // Auto-sync initial local data to Firestore:
-  // When an admin or PC with employees connects and Firestore is empty or missing them,
-  // automatically upload the full employee roster to Firestore so mobile devices get them instantly.
+  // Ensures all 7 official TORREMASCOTAS S.L. employee records and company fiscal data
+  // are pushed and up-to-date in Firestore.
   useEffect(() => {
     let isCancelled = false;
     const autoPushEmployees = async () => {
@@ -1283,9 +1308,24 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         if (isCancelled) return;
         setIsCloudConnected(true);
 
-        // If cloud is empty and local has employees, or local has more employees than cloud
-        if (employees.length > 0 && (snap.empty || employees.length > snap.size)) {
-          console.log(`[FichaPlus Cloud] Auto-uploading ${employees.length} employees to Firestore...`);
+        const cloudDocs = snap.docs.map((d) => d.data() as EmployeeRecord);
+        const needsSync =
+          snap.empty ||
+          employees.length > snap.size ||
+          employees.some((emp) => {
+            const cloudMatch = cloudDocs.find((c) => c.id === emp.id || c.dni === emp.dni);
+            return (
+              !cloudMatch ||
+              !cloudMatch.socialSecurityNumber ||
+              cloudMatch.dni !== emp.dni ||
+              cloudMatch.email !== emp.email ||
+              cloudMatch.phone !== emp.phone ||
+              cloudMatch.pinCode !== emp.pinCode ||
+              cloudMatch.vacationDays !== emp.vacationDays
+            );
+          });
+
+        if (employees.length > 0 && needsSync) {
           for (const emp of employees) {
             if (emp?.id) {
               await setDoc(doc(db, 'employees', emp.id), emp, { merge: true });
@@ -1294,14 +1334,13 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           if (companySettings) {
             await setDoc(doc(db, 'company_settings', 'main'), companySettings, { merge: true });
           }
-          console.log('[FichaPlus Cloud] Auto-upload to Firestore completed successfully.');
         }
       } catch (err: any) {
         console.warn('[FichaPlus Cloud] Auto-upload notice:', err?.message || err);
       }
     };
 
-    const timer = setTimeout(autoPushEmployees, 1500);
+    const timer = setTimeout(autoPushEmployees, 1200);
     return () => {
       isCancelled = true;
       clearTimeout(timer);
@@ -1404,9 +1443,25 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         (snap) => {
           if (snap.exists()) {
             const data = snap.data() as CompanySettings;
-            setCompanySettings((prev) => ({ ...prev, ...data }));
+            const isLegacyPlaceholder =
+              !data.companyName ||
+              data.companyName === 'FichaPlus' ||
+              data.fiscalId === 'B-12345678';
+            const mergedData: CompanySettings = isLegacyPlaceholder
+              ? {
+                  ...INITIAL_COMPANY,
+                  ...data,
+                  companyName: INITIAL_COMPANY.companyName,
+                  fiscalId: INITIAL_COMPANY.fiscalId,
+                  cccCode: INITIAL_COMPANY.cccCode,
+                  workplaceAddress: INITIAL_COMPANY.workplaceAddress,
+                  workplaceCity: INITIAL_COMPANY.workplaceCity,
+                  collectiveAgreement: INITIAL_COMPANY.collectiveAgreement,
+                }
+              : data;
+            setCompanySettings((prev) => ({ ...prev, ...mergedData }));
             try {
-              localStorage.setItem('fichaplus_company_settings', JSON.stringify(data));
+              localStorage.setItem('fichaplus_company_settings', JSON.stringify(mergedData));
             } catch {}
           }
         },
